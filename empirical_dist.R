@@ -71,10 +71,11 @@ d3 <- expand.grid(h = 0:61,
                   current_state = c("H","U"),
                   l = 0,
                   stringsAsFactors = FALSE) %>% 
-  dplyr::filter(h <= (age - 50)) %>% 
-  mutate(l = case_when(age == 50 & current_state == "H" ~ .9,
-                       age == 50 & current_state == "U" ~ .1,
-                       TRUE ~ 0))
+  fsubset(h <= (age - 50)) %>% 
+  fmutate(l = data.table::fcase(
+    age == 50 & current_state == "H" , .9,
+    age == 50 & current_state == "U" , .1,
+    default = 0))
 
 tic()
 for (a in 50:110) {
@@ -95,12 +96,24 @@ for (a in 50:110) {
     lxhU <- fsubset(d3nd, current_state == "U")$l
     
     # those that increment health
-    ind1 <- d3$age == a + 1 & d3$h == d + 1 & d3$current_state == "H"
-    d3$l[ind1] <- d3$l[ind1] + lxhH * HH + lxhU * UH
     
-    # those that increment health
-    ind2 <- d3$age == a + 1 & d3$h == d & d3$current_state == "U"
-    d3$l[ind2] <- d3$l[ind2] + lxhH * HH + lxhU * UH
+    # TR this sort of reassignment is also maybe not necessary
+    d3 <-
+     d3 |>
+     fmutate(l = data.table::fifelse(age == a + 1 & h == d + 1 & current_state == "H",
+            l +  lxhH * HH + lxhU * UH,
+            l)) |>
+    # those that don't increment health
+     fmutate(l = data.table::fifelse(age == a + 1 & h == d & current_state == "U",
+             l +  lxhH * HH + lxhU * UH,
+             l))
+    # This is again slower; fcase() doesn't have a vectorized TRUE ~ bla bla argument
+    # d3 <-
+    #   d3 |>
+    # fmutate(l = data.table::fcase(
+    #   age == a + 1 & h == d + 1 & current_state == "H" , l +  lxhH * HH + lxhU * UH,
+    #   age == a + 1 & h == d & current_state == "U", l +  lxhH * HH + lxhU * UH,
+    #   age != a + 1 & !(h == d + 1 & current_state == "H") & !(h == d & current_state == "U"), l))
   }
 }
 toc()
@@ -163,6 +176,9 @@ sum(lu)
 
 d3 %>% write_csv("d3.csv")
 }
+
+d1 <- tibble(a=1:10,b=rnorm(10))
+fsubset(d1)
 
 
 d3 <- read_csv("d3.csv")
