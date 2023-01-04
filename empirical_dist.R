@@ -1,6 +1,8 @@
 
 library(colorspace)
 library(tidyverse)
+library(tictoc)
+library(collapse) # for fsubset(), fast subsetting
 source("aux_functions.R")
 # empirical distribution of occupancy time, that is.
 # The brute force approach won't be practical, as there
@@ -74,48 +76,80 @@ d3 <- expand.grid(h = 0:61,
                        age == 50 & current_state == "U" ~ .1,
                        TRUE ~ 0))
 
-
-
-for (a in 50:110){
-  possible_ds <- d3 %>% 
-    filter(age == a) %>% 
-    pull(h) %>% 
-    unique()
+tic()
+for (a in 50:110) {
   
-  HH <- p_tibble_extrap %>% filter(age == a) %>% pull(HH)
-  HU <- p_tibble_extrap %>% filter(age == a) %>% pull(HU)
-  UU <- p_tibble_extrap %>% filter(age == a) %>% pull(UU)
-  UH <- p_tibble_extrap %>% filter(age == a) %>% pull(UH)
+  d3n              <- fsubset(d3, age == a)
+  possible_ds      <- unique(d3n$h) |> sort()
+  dt               <- fsubset(p_tibble_extrap,age == a)
   
+  HH <- dt$HH
+  HU <- dt$HU
+  UU <- dt$UU
+  UH <- dt$UH
   
-  for (d in possible_ds){
+  for (d in possible_ds) {
     
-    lxhH <-  d3 %>% 
-      filter(age == a,
-             h == d,
-             current_state == "H") %>% 
-      pull(l)
-    lxhU <- d3 %>% 
-      filter(age == a,
-             h == d,
-             current_state == "U") %>% 
-      pull(l)
+    d3nd <- fsubset(d3n, h == d)
+    lxhH <- fsubset(d3nd, current_state == "H")$l
+    lxhU <- fsubset(d3nd, current_state == "U")$l
     
-    d3 <- d3 %>% 
-      mutate(l = case_when(# increment to current healthy in next time step
-        age == a + 1 & 
-          h == d + 1 & 
-          current_state == "H" ~ l + lxhH * HH + lxhU * UH,
-        # increment to current unhealthy in next time step
-        age == a + 1 & 
-          h == d & 
-          current_state == "U" ~ l + lxhU * UU + lxhH * HU,
-        TRUE ~ l))
+    # those that increment health
+    ind1 <- d3$age == a + 1 & d3$h == d + 1 & d3$current_state == "H"
+    d3$l[ind1] <- d3$l[ind1] + lxhH * HH + lxhU * UH
     
+    # those that increment health
+    ind2 <- d3$age == a + 1 & d3$h == d & d3$current_state == "U"
+    d3$l[ind2] <- d3$l[ind2] + lxhH * HH + lxhU * UH
   }
 }
+toc()
+#toc()
 
-
+# a tidy way to do the same, far slower due to subsetting. This was
+# an early version, replaced with RTZ's base refactorization, further
+# modified by TR for more speed.
+# t1 <- tic()
+# for (a in 50:110){
+#   possible_ds <- d3 %>% 
+#     filter(age == a) %>% 
+#     pull(h) %>% 
+#     unique()
+#   
+#   HH <- p_tibble_extrap %>% filter(age == a) %>% pull(HH)
+#   HU <- p_tibble_extrap %>% filter(age == a) %>% pull(HU)
+#   UU <- p_tibble_extrap %>% filter(age == a) %>% pull(UU)
+#   UH <- p_tibble_extrap %>% filter(age == a) %>% pull(UH)
+#   
+#   
+#   for (d in possible_ds){
+#     
+#     lxhH <-  d3 %>% 
+#       filter(age == a,
+#              h == d,
+#              current_state == "H") %>% 
+#       pull(l)
+#     lxhU <- d3 %>% 
+#       filter(age == a,
+#              h == d,
+#              current_state == "U") %>% 
+#       pull(l)
+#     
+#     d3 <- d3 %>% 
+#       mutate(l = case_when(# increment to current healthy in next time step
+#         age == a + 1 & 
+#           h == d + 1 & 
+#           current_state == "H" ~ l + lxhH * HH + lxhU * UH,
+#         # increment to current unhealthy in next time step
+#         age == a + 1 & 
+#           h == d & 
+#           current_state == "U" ~ l + lxhU * UU + lxhH * HU,
+#         TRUE ~ l))
+#     
+#   }
+#   
+# }
+# t2 <- toc()
 # sum checks
 d3 %>% 
   filter(current_state == "H") %>% 
@@ -129,6 +163,7 @@ sum(lu)
 
 d3 %>% write_csv("d3.csv")
 }
+
 
 d3 <- read_csv("d3.csv")
 
