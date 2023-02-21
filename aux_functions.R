@@ -1,4 +1,10 @@
-
+init_constant <- function(x){
+  u <- matrix(x[c("HH","UH","HU","UU")] %>% unlist(),2,byrow=TRUE)
+  v <- eigen(u)$vectors[,1]
+  init <- v / sum(v)
+  names(init) <- c("H","U")
+  init
+}
 
 pi_block <- function(p, state_from, state_to, age){
   state_fromi  <- state_from[1]

@@ -9,8 +9,78 @@ source("aux_functions.R")
 # are too many probabilities to derive. Each is solvable,
 # but some can be reached in too many ways.
 
-p_tibble_extrap <- read_csv("transitions_extrap.csv",
-                            show_col_types = FALSE)
+p_tibble_extrap1 <- read_csv("transitions_Lorenti_alr.csv",
+                            show_col_types = FALSE) %>% 
+  mutate(variant = "Lorenti ITA 2012 GALI (alr)", .before = 1)
+
+
+p_tibble_extrap2 <- read_csv("transitions_extrap_hrs.csv",
+                            show_col_types = FALSE) %>% 
+  mutate(variant = "Foltyn USA SRH (80+ alr)", .before = 1) %>% 
+  mutate(sex = "f", .after = variant)
+
+p_tibble_extrap3 <- read_csv("transitions_lievre2003_annual.csv",
+                            show_col_types = FALSE) %>% 
+mutate(variant = "Lievre 2003 Disability", .before = 1) 
+
+p_tibble_extrap4 <- read_csv("/home/tim/workspace/ms_dist/pij455.csv",
+                             show_col_types = FALSE) %>% 
+  rename(age = Age1, HH = p11, HU = p12, HD = p13, UH = p21, UU = p22, UD = p23) %>% 
+  mutate(sex = "m",.before=age) %>% 
+  mutate(variant = "Muszynska-Sp ITA 2017ish GALI", .before = sex)
+
+# make long then stack
+p1l <- p_tibble_extrap1 %>% 
+  pivot_longer(-c(age,sex),names_to = "from_to", values_to = "p") 
+p2l <- p_tibble_extrap2 %>% 
+  pivot_longer(-age,names_to = "from_to", values_to = "p") 
+p3l <- p_tibble_extrap3 %>% 
+  pivot_longer(-c(sex,age),names_to = "from_to", values_to = "p") 
+p4l <- p_tibble_extrap4 %>% 
+  pivot_longer(-age,names_to = "from_to", values_to = "p")
+
+bind_rows(p1l,p2l,p3l,p4l) %>% 
+  ggplot(aes(x=age,y=p,color=from_to,linetype=sex)) +
+  geom_line() +
+  facet_wrap(~variant) +
+  theme_minimal()
+
+# p_tibble_extrap %>% 
+#   pivot_longer(-1,names_to = "from_to", values_to = "p") %>% 
+#   ggplot(aes(x=age,y=p,color = from_to)) +
+#   geom_line()
+
+# Magda
+p_tibble_extrap <-
+  p_tibble_extrap4 %>% 
+  filter(age <=110)
+
+# Angelo
+p_tibble_extrap <-
+  p_tibble_extrap1 %>% 
+  filter(sex=="m")
+
+# Lievre
+p_tibble_extrap <-
+  p_tibble_extrap3 %>% 
+  filter(sex=="m")
+
+# Folyn SRH HRS
+p_tibble_extrap <-
+  p_tibble_extrap2 
+
+# ensure not a leaky system
+p_tibble_extrap <-
+  p_tibble_extrap %>% 
+  # positive col range ensures it'll work with or without sex, age, variant cols
+  pivot_longer(c(HU,HD,HH,UH,UU,UD), names_to = "from_to", values_to = "p") %>% 
+  mutate(from = substr(from_to,1,1)) %>% 
+  group_by(age, from) %>% 
+  mutate(p = p / sum(p)) %>% 
+  ungroup() %>% 
+  select(-from) %>% 
+  pivot_wider(names_from = from_to, values_from = p)
+
 # step 1: count spells by starting age.
 
 p_tibble_extrap %>% nrow()
@@ -24,7 +94,11 @@ hu <- p_tibble_extrap[["HU"]]
 
 n <- nrow(p_tibble_extrap)
 
-init <- c(H=.9, U = .1)
+# init <- c(H=.9, U = .1)
+init <- p_tibble_extrap %>% 
+  filter(age == 50) %>% 
+  init_constant()
+
 lu <- c(init["U"],rep(0,n))
 lh <- c(init["H"],rep(0,n))
 for (i in 1:n){
@@ -41,7 +115,7 @@ LE  <- HLE + ULE
 
 # spell termination probabilities
 hend <- c(1 - hh, 1) # 1 for closeout
-# we have n+1 elements (up toa ge 111)
+# we have n+1 elements (up to age 111)
 n    <- nrow(p_tibble_extrap) # only to age 110
 
 # ------------------------ #
@@ -62,10 +136,10 @@ n    <- nrow(p_tibble_extrap) # only to age 110
 # plot(50:111,lu,ylim=c(0,1),type='l',col="red",ylab="lxs",xlab="age")
 # lines(50:111,lh)
 
-ages <- p_tibble_extrap$age
 
 calculate.this <- FALSE
 if (calculate.this){
+
 d3 <- expand.grid(h = 0:61,
                   age = 50:111,
                   current_state = c("H","U"),
@@ -73,9 +147,10 @@ d3 <- expand.grid(h = 0:61,
                   stringsAsFactors = FALSE) %>% 
   fsubset(h <= (age - 50)) %>% 
   fmutate(l = data.table::fcase(
-    age == 50 & current_state == "H" , .9,
-    age == 50 & current_state == "U" , .1,
+    age == 50 & current_state == "H" , init["H"],
+    age == 50 & current_state == "U" , init["U"],
     default = 0))
+
 
 tic()
 for (a in 50:110) {
@@ -105,7 +180,7 @@ for (a in 50:110) {
             l)) |>
     # those that don't increment health
      fmutate(l = data.table::fifelse(age == a + 1 & h == d & current_state == "U",
-             l +  lxhH * HH + lxhU * UH,
+             l +  lxhH * HU + lxhU * UU,
              l))
     # This is again slower; fcase() doesn't have a vectorized TRUE ~ bla bla argument
     # d3 <-
@@ -174,29 +249,29 @@ d3 %>%
   pull(l) %>% sum()
 sum(lu)
 
-d3 %>% write_csv("d3.csv")
-}
-
-d1 <- tibble(a=1:10,b=rnorm(10))
-fsubset(d1)
-
-
-d3 <- read_csv("d3.csv")
-
 d_out <- 
   p_tibble_extrap %>% 
   select(age, HD, UD) %>% 
   rename(H=HD,U=UD) %>% 
   pivot_longer(c(H,U), names_to = "current_state", values_to = "qx") %>% 
-  right_join(d3,by=c("age","current_state")) %>% 
+  right_join(d3,by=c("age","current_state"), multiple = "all") %>% 
   mutate(qx = ifelse(age == 111,1,qx),
          dxs = qx * l,
          x = age - 50,
          u = x - h) %>% 
   select(current_state, age, x, h, u, lxsc = l, dxsc = dxs)
 
+d_out %>% write_csv("d_out.csv")
+}
+
+
+d3 <- read_csv("d3.csv")
+
+
+
 d_out$dxsc %>% sum()
 
+# variance checks
 d_out %>% 
   mutate(le = sum(x * dxsc),
          mh = sum(h * dxsc),
@@ -208,7 +283,7 @@ d_out %>%
   mutate(vle_check = vh + vu + 2 * cov_hu)
 
 
-
+# mean distance variants 
 d_out %>% 
   mutate(le = sum(x * dxsc),
          mh = sum(h * dxsc),
@@ -299,11 +374,12 @@ d_out_summarized %>%
   annotate("segment",x=LE-6,xend=HLE,y=6,yend=ULE,linetype=2, color = "#FFFFFF50") +
   # label the mean
   geom_curve(
-    aes(x = 40, y = 30, xend = HLE+1, yend = ULE),
+    aes(x = 40, y = 30, xend = HLE+1, yend = ULE+1),
     arrow = arrow(length = unit(0.02, "npc")),
     ncp = 20,
     linewidth = .25,
-    curvature = -.2
+    curvature = -.2,
+    color = "#f0941d"
   ) +
   annotate("text",x = 44, y = 28, label = paste0("Mean\n(",sprintf("%.2f",round(HLE,2)),",",round(ULE,2),")")) +
 # label the mode
@@ -311,14 +387,14 @@ d_out_summarized %>%
              aes(x=h,y=u),
              color = "#ebedbb") +
   geom_curve(
-    aes(x = 35, y = 40, xend = 19, yend = 22),
+    aes(x = 35, y = 40, xend = d_mode$h, yend = d_mode$u+1),
     arrow = arrow(length = unit(0.02, "npc")),
     ncp = 20,
     linewidth = .25,
     curvature = .2
   ) +
-  annotate("text",x = 39, y = 41, label = paste0("Mode (integer for now)\n(19,21)"))
-main_plot
+  annotate("text",x = 39, y = 41, label = paste0("Mode (integer for now)\n(",d_mode$h,", ",d_mode$u,")"))
+main_plot + labs(title = "Foltyn result")
 ggsave(main_plot,filename = "main_plot.svg", width = 6,height=7,units="in")
 
 dh <-
