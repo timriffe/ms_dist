@@ -100,7 +100,8 @@ hrs_in2 %>%
   filter(!is.na(iwstat)) %>% 
   select(id,sex,bdate,ddate,wt,wave,iwstat,age,t1,t2,adl_from,adl_to,iadl_from,iadl_to)
 
-
+pas_test %>% 
+  write_csv("hrs_ready.csv")
 pas_test %>% 
   filter(wave == 12) %>% 
   write_csv("hrs_wave12.csv")
