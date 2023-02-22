@@ -1,4 +1,4 @@
-# Health and Retirement Study, ([insert Product Name]) public use dataset. Produced and distributed by the University of Michigan with funding from the National Institute on Aging (grant number NIA U01AG009740). Ann Arbor, MI, (year).
+# Health and Retirement Study, (RAND HRS Longitudinal File 2018, release Jul 2022 (V2)) public use dataset. Produced and distributed by the University of Michigan with funding from the National Institute on Aging (grant number NIA U01AG009740). Ann Arbor, MI, (2023).
 
 library(tidyverse)
 library(haven)
