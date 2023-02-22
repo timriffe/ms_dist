@@ -7,29 +7,9 @@ rand_file <- "randhrs1992_2018v2_STATA/randhrs1992_2018v2.dta"
 file.exists(rand_file)
 hrs_in <- read_stata(rand_file)
 
-
-cols_pick <- tibble(rand_name = c("HHIDPN"), 
-                    
-                    
-                    new_name = c("id"))
-
-"HHIDPN" # id
-# wave response indicator (1,0)
-starts_with("INW")
-ends_with("WSTAT")  # respondent 1
-                    # dead 5
-ends_with("WTCRNH") # person weight (combined respondent and nursing home)
-ends_with("WMID") # interview midpoint date
-ends_with("BDATE") # birth date, missing imputed days since 1/1/1960
-ends_with("DDATE") # death date, missings imputed; days since 1/1/1960
-"RAGENDER" # gender; 1 male 2 female
-ends_with("ADL5A") # count of 5 adls from wave 2 forward
-ends_with("IADL5A") # count of 5 adls from wave 2 forward
-
-dim(hrs_in)
-colnames(hrs_in)[grepl(colnames(hrs_in),pattern="id")]
-hrs_in2 <- 
-hrs_in %>% 
+hrs_processed <-
+  hrs_in %>% 
+  # cut down columns, don't keep spouse info, although we could, but then what weight??
   select(id = hhidpn,
          sex = ragender,
          ends_with("wstat") & starts_with("r"),
@@ -40,23 +20,25 @@ hrs_in %>%
          ends_with("adl5a") & starts_with("r"),
          ends_with("iadl5a") & starts_with("r"),
          -reiwmid) %>% 
-  clean_names()
-hrs_in2 %>% colnames()
-pas_test <- 
-hrs_in2 %>% 
+  clean_names() %>% 
   # slice(1:5000) %>% 
+  # this males a full stack, very long!
   pivot_longer(-c(id, bdate, ddate,sex), names_to = "wave_var", values_to = "value") %>% 
- # pull(wave_var) %>% unique()
+  # separate() too tough to make regex work on all variables, so we do it manually
   mutate(
     wave_var = substr(wave_var, 2, nchar(wave_var)),
         wave = parse_number(wave_var),
          var = gsub('[0-9]+', '', wave_var)) %>% 
   select(-wave_var) %>% 
+  # wave 1 all missing for adl5 and iadl5
+  filter(wave > 1) %>% 
+  # bring variables back to columns
   pivot_wider(names_from = var, values_from = value) %>% 
   rename(wt = wtcrnh,
          t1 = iwmid,
          iadl = iadla,
          adl = adla) %>% 
+  # create dates, remove haven labels
   mutate(sex = labelled::remove_val_labels(sex),
          iwstat = labelled::remove_val_labels(iwstat),
          t1 = labelled::remove_val_labels(t1),
@@ -67,14 +49,16 @@ hrs_in2 %>%
          bdate = as_date(bdate, origin = as_date("1960-01-01")),
          ddate =  as_date(ddate, origin = as_date("1960-01-01"))) %>% 
   filter(!is.na(t1)) %>% 
+  # we want to replace 0 weights with NAs in order to use fill()
   mutate(wt = ifelse(wt == 0, NA, wt)) %>% 
   group_by(id) %>% 
   tidyr::fill(wt) %>% 
-  filter(wave > 1) %>% 
-  group_by(id) %>% 
+  # add row to end of each group to capture death event
   group_modify(~ add_row(.x)) %>% 
+  # population birth and death dates for new row
   tidyr::fill(bdate,ddate,wt,t1) %>% 
   ungroup() %>% 
+  # recode variables to reduced spaces
   mutate(t1 = if_else(is.na(wave) & ddate > t1, ddate, t1),
          iadl_from = case_when(iadl == 0 ~ "H",
                           iadl > 0 ~ "U",
@@ -90,6 +74,7 @@ hrs_in2 %>%
                          sex == 2 ~ "female",
                          TRUE ~ NA_character_)) %>% 
   group_by(id) %>% 
+  # create t2 variables to have side-by-side
   mutate(age = as.double(difftime(t1,bdate,units="days")/365),
          t1 = paste(month(t1),year(t1),sep="/"),
          bdate = paste(month(bdate),year(bdate),sep="/"),
@@ -102,12 +87,14 @@ hrs_in2 %>%
   filter(!is.na(iwstat)) %>% 
   select(id,sex,bdate,ddate,wt,wave,iwstat,age,t1,t2,adl_from,adl_to,iadl_from,iadl_to)
 
-pas_test %>% 
+hrs_processed %>% 
   write_csv("hrs_ready.csv")
-pas_test %>% 
+
+# samples for Magda 
+hrs_processed %>% 
   filter(wave == 12) %>% 
   write_csv("hrs_wave12.csv")
   
-pas_test %>% 
+hrs_processed %>% 
   filter(wave == 5) %>% 
   write_csv("hrs_wave5.csv")
