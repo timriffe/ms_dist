@@ -66,3 +66,4 @@ sum(colSums(Hspells) * 1:62) # as sum of spell duration conditional on starting 
 # iterate over length of life to filter the possible columns of Hspells; we should be taking natural sums of spell probabilities by length of life, where each spell could be counted multiply.
 
 # in this end the combinatorics makes this approach impractical. Using this spells by duration and onset age approach does not really reduce the size of the problem.
+
