@@ -214,6 +214,16 @@ read_imach_transitions("imach/hrs_wave1012f_imach/PROB_rhrs_wave1012f_imach.txt"
   ylim(0,1)
 # colnames(pij) <- c("age","HH", "HU", "HD", "UH", "UU", "UD")
 
+read_imach_transitions("imach/hrs_wave1012f_imach/PROB_rhrs_wave1012f_imach.txt") %>% 
+  select(age = Age,
+         HH = p11,
+         HU = p12,
+         HD = p13,
+         UH = p21,
+         UU = p22,
+         UD = p23) %>% 
+  write_csv("hrs_adl_f_1013_stepm6_mle1_basic.csv")
+
 hrs_processed %>% 
   filter(wave == 5) %>% 
   write_csv("hrs_wave5.csv")
