@@ -32,6 +32,38 @@ p_tibble_extrap4 <- read_csv("/home/tim/workspace/ms_dist/pij455.csv",
   mutate(sex = "m",.before=age) |> 
   mutate(variant = "Muszynska-Sp ITA 2017ish GALI", .before = sex)
 
+p_tibble_extrap5 <- read_csv("pijfemHRS.csv") |>
+  rename(age = Age1,
+         HH = p11,
+         HU = p12,
+         HD = p13,
+         UH = p21,
+         UU = p22,
+         UD = p23) %>% 
+  mutate(sex = "f",.before=age) |> 
+  mutate(variant = "Muszynska-Sp HRS adl", .before = sex)
+
+p_tibble_extrap6 <- read_csv("pijfemHRS_iadl.csv") |>
+  rename(age = Age1,
+         HH = p11,
+         HU = p12,
+         HD = p13,
+         UH = p21,
+         UU = p22,
+         UD = p23) %>% 
+  mutate(sex = "f",.before=age) |> 
+  mutate(variant = "Muszynska-Sp HRS iadl", .before = sex)
+
+p_tibble_extrap6 <- read_csv("pijmaleHRS.csv") |>
+  rename(age = Age1,
+         HH = p11,
+         HU = p12,
+         HD = p13,
+         UH = p21,
+         UU = p22,
+         UD = p23) %>% 
+  mutate(sex = "f",.before=age) |> 
+  mutate(variant = "Muszynska-Sp HRS adl", .before = sex)
 # make long then stack
 p1l <- p_tibble_extrap1 |> 
   pivot_longer(-c(age,sex),names_to = "from_to", values_to = "p") 
@@ -72,6 +104,17 @@ p_tibble_extrap <-
 p_tibble_extrap <-
   p_tibble_extrap2 
 
+# Muszynska-Spielauer HRS ADL
+p_tibble_extrap <-
+  p_tibble_extrap5 |> 
+  filter(age <=110)
+p_tibble_extrap <-
+  p_tibble_extrap6 |> 
+  filter(age <=110)
+p_tibble_extrap <-
+  p_tibble_extrap7 |> 
+  filter(age <=110)
+
 # ensure not a leaky system
 p_tibble_extrap <-
   p_tibble_extrap |>
@@ -95,7 +138,7 @@ uu <- p_tibble_extrap$UU
 hu <- p_tibble_extrap$HU
 
 n    <- nrow(p_tibble_extrap)
-init <- c(H = 0.9, U = 0.1)
+
 lu   <- c(init["U"], rep(0, n))
 lh   <- c(init["H"], rep(0, n))
 
@@ -174,7 +217,7 @@ for (a in 50:110) {
     d3 <- d3 |>
       fmutate(l = fcase(
         age == a + 1 & h == d + 1 & current_state == "H", l + lxhH * HH + lxhU * UH,
-        age == a + 1 & h == d     & current_state == "U", l + lxhH * HH + lxhU * UH,
+        age == a + 1 & h == d     & current_state == "U", l + lxhU * UU + lxhH * HU,
         rep_len(TRUE, length(l)), l))
   }
 }
@@ -189,7 +232,7 @@ d_out <- p_tibble_extrap |>
   pivot_longer(c(H, U), 
                names_to  = "current_state", 
                values_to = "qx") |> 
-  right_join(d3, by = c("age", "current_state")) |>
+  right_join(d3, by = c("age", "current_state"), multiple = "all") |>
   mutate(qx  = ifelse(age == 111, 1, qx),
          dxs = qx * l,
          x   = age - 50,
@@ -341,18 +384,13 @@ main_plot <- d_out_summarized |>
            color    = "#FFFFFF50") +
   # label the mean
   geom_curve(
-<<<<<<< HEAD
-    aes(x = 40, y = 30, xend = HLE+1, yend = ULE+1),
-    arrow = arrow(length = unit(0.02, "npc")),
-    ncp = 20,
-=======
+
     aes(x     = 40, 
         y     = 30, 
         xend  = HLE + 1, 
         yend  = ULE),
     arrow     = arrow(length = unit(0.02, "npc")),
     ncp       = 20,
->>>>>>> 7f051f7850b2b0a39cab6cb43861065ffb568e8d
     linewidth = .25,
     curvature = -.2,
     color = "#f0941d"
@@ -374,8 +412,8 @@ main_plot <- d_out_summarized |>
     curvature = .2
   ) +
   annotate("text",x = 39, y = 41, label = paste0("Mode (integer for now)\n(",d_mode$h,", ",d_mode$u,")"))
-main_plot + labs(title = "Foltyn result")
-ggsave(main_plot,filename = "main_plot.svg", width = 6,height=7,units="in")
+main_plot + labs(title = "HRS w12 males adl")
+# ggsave(main_plot,filename = "main_plot.svg", width = 6,height=7,units="in")
 
 
 main_plot
