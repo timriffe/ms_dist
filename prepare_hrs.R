@@ -160,16 +160,19 @@ hrs_processed_long
 hrs_processed_long %>% 
   write_csv("hrs_processed_long.csv")
 hrs_processed_long <- read_csv("hrs_processed_long.csv")
+hrs_processed_long %>% 
+  ungroup() %>% 
+  filter(between(wave,10,13),
+         !is.na(t2),
+         female == 1, iadl_from == 2, iadl_to == 1)
 # samples for Magda 
 hrs_processed_long %>% 
   ungroup() %>% 
   filter(between(wave,10,13),
-         !is.na(t2)) %>% 
-  mutate(age2 = age^2,
-         age3 = age^3,
-         age4 = age^4) %>% 
-  select(wt, female, bdate, ddate, t1, adl_from, t2, adl_to) %>% 
-  write.table("imach/hrs_wave1012.txt", col.names = FALSE, quote = FALSE)
+         !is.na(t2),
+         female == 0) %>% 
+  select(wt, bdate, ddate, t1, adl_from, t2, adl_to) %>% 
+  write.table("imach/hrs_m_adl.txt", col.names = FALSE, quote = FALSE)
 
 
 here::here()
@@ -177,7 +180,9 @@ here::here()
 #model=1+age+V1+age*V1.
 
 # do this in terminal instead.
-# system2("/usr/local/bin/imach-0.99r42", "/home/tim/workspace/ms_dist/hrs_wave12_imach.txt",wait=FALSE)
+# /usr/local/bin/imach-0.99r42 imach/hrs_wave1012f_imach.txt
+# /usr/local/bin/imach-0.99r42 imach/hrs_wave1012m_imach.txt
+
 read_imach_transitions <- function(path){
   # this is hackish. The lag between Age and the actual 
   # first row of data actually can vary depending on the specification...
@@ -200,19 +205,19 @@ read_imach_transitions <- function(path){
     bind_rows()
 }
 
-read_imach_transitions("imach/hrs_wave1012f_imach/PROB_rhrs_wave1012f_imach.txt") %>% 
-  select(age = Age,
-         HH = p11,
-         HU = p12,
-         HD = p13,
-         UH = p21,
-         UU = p22,
-         UD = p23) %>% 
-  pivot_longer(-age, names_to = "from_to", values_to= "p") %>% 
-  ggplot(aes(x=age,y=p,color=from_to)) +
-  geom_line() +
-  ylim(0,1)
-# colnames(pij) <- c("age","HH", "HU", "HD", "UH", "UU", "UD")
+ read_imach_transitions("imach/hrs_wave1012m_age2_imach/PROB_rhrs_wave1012m_age2_imach.txt") %>% 
+   select(age = Age,
+          HH = p11,
+          HU = p12,
+          HD = p13,
+          UH = p21,
+          UU = p22,
+          UD = p23) %>% 
+   pivot_longer(-age, names_to = "from_to", values_to= "p") %>% 
+   ggplot(aes(x=age,y=p,color=from_to)) +
+   geom_line() +
+   ylim(0,1)
+
 
 read_imach_transitions("imach/hrs_wave1012f_imach/PROB_rhrs_wave1012f_imach.txt") %>% 
   select(age = Age,
@@ -222,29 +227,18 @@ read_imach_transitions("imach/hrs_wave1012f_imach/PROB_rhrs_wave1012f_imach.txt"
          UH = p21,
          UU = p22,
          UD = p23) %>% 
-  write_csv("hrs_adl_f_1013_stepm6_mle1_basic.csv")
+  write_csv("hrs_adl_f_1013_stepm12_mle1_basic.csv")
 
-hrs_processed %>% 
-  filter(wave == 5) %>% 
-  write_csv("hrs_wave5.csv")
+adl_iadl_all <-
+tibble(path = c(
+"hrs_adl_f_1013_stepm12_mle1_basic.csv",
+"hrs_adl_m_1013_stepm12_mle1_basic.csv",
+"hrs_iadl_f_1013_stepm12_mle1_basic.csv",
+"hrs_iadl_m_1013_stepm12_mle1_basic.csv"),
+sex = c("f","m","f","m"),
+measure = c("ADL","ADL","IADL","IADL")) %>% 
+  group_by(sex,measure) %>% 
+  do(read_csv(.data$path, show_col_types = FALSE))  %>% 
+  filter(age <= 110)
 
-hrs_processed <- read_csv("hrs_ready.csv")
-hrs_processed %>% 
-  pull(iadl_to) %>% unique()
-
-rm(hrs_in,hrs_processed)
-
-hrs_trans <- read_csv("pijfemHRS.csv")
-hrs_trans <- read_csv("pijfemHRS_iadl.csv")
-hrs_trans <- read_csv("pijmaleHRS.csv")
-hrs_trans %>% 
-  rename(age = Age1,
-         HH = p11,
-         HU = p12,
-         HD = p13,
-         UH = p21,
-         UU = p22,
-         UD = p23) %>% 
-  pivot_longer(-age, names_to = "from_to", values_to = "p") %>% 
-  ggplot(aes(x=age, y = p, color = from_to)) +
-  geom_line()
+write_csv(adl_iadl_all, "hrs_adl_iadl_all.csv")
