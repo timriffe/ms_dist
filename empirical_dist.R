@@ -1,260 +1,60 @@
 # ------------------------------------------------------------------------------ #
-library(colorspace)
-library(data.table)
-library(tidyverse)
-library(collapse) # for fsubset(), fast subsetting
-library(tictoc)
+
 source("aux_functions.R")
 
-# empirical distribution of occupancy time, that is.
-# The brute force approach won't be practical, as there
-# are too many probabilities to derive. Each is solvable,
-# but some can be reached in too many ways.
-p_tibble_extrap <- read_csv("transitions_extrap.csv", show_col_types = FALSE)
+adl_iadl <- read_csv("hrs_adl_iadl_all.csv", show_col_types= FALSE) |>
+  mutate(race = "all", .before=2)
+srh <- read_csv("foltyn_hrs_transitions.csv", show_col_types= FALSE) |>
+  mutate(measure = "SRH", .before = 1)
 
-p_tibble_extrap1 <- read_csv("transitions_Lorenti_alr.csv",
-                            show_col_types = FALSE) |> 
-  mutate(variant = "Lorenti ITA 2012 GALI (alr)", .before = 1)
-
-
-p_tibble_extrap2 <- read_csv("transitions_extrap_hrs.csv",
-                            show_col_types = FALSE) |> 
-  mutate(variant = "Foltyn USA SRH (80+ alr)", .before = 1) |> 
-  mutate(sex = "f", .after = variant)
-
-p_tibble_extrap3 <- read_csv("transitions_lievre2003_annual.csv",
-                            show_col_types = FALSE) |> 
-mutate(variant = "Lievre 2003 Disability", .before = 1) 
-
-p_tibble_extrap4 <- read_csv("/home/tim/workspace/ms_dist/pij455.csv",
-                             show_col_types = FALSE) %>% 
-  rename(age = Age1, HH = p11, HU = p12, HD = p13, UH = p21, UU = p22, UD = p23) |>
-  mutate(sex = "m",.before=age) |> 
-  mutate(variant = "Muszynska-Sp ITA 2017ish GALI", .before = sex)
-
-p_tibble_extrap5 <- read_csv("pijfemHRS.csv") |>
-  rename(age = Age1,
-         HH = p11,
-         HU = p12,
-         HD = p13,
-         UH = p21,
-         UU = p22,
-         UD = p23) %>% 
-  mutate(sex = "f",.before=age) |> 
-  mutate(variant = "Muszynska-Sp HRS adl", .before = sex)
-
-p_tibble_extrap6 <- read_csv("pijfemHRS_iadl.csv") |>
-  rename(age = Age1,
-         HH = p11,
-         HU = p12,
-         HD = p13,
-         UH = p21,
-         UU = p22,
-         UD = p23) %>% 
-  mutate(sex = "f",.before=age) |> 
-  mutate(variant = "Muszynska-Sp HRS iadl", .before = sex)
-
-p_tibble_extrap6 <- read_csv("pijmaleHRS.csv") |>
-  rename(age = Age1,
-         HH = p11,
-         HU = p12,
-         HD = p13,
-         UH = p21,
-         UU = p22,
-         UD = p23) %>% 
-  mutate(sex = "f",.before=age) |> 
-  mutate(variant = "Muszynska-Sp HRS adl", .before = sex)
-# make long then stack
-p1l <- p_tibble_extrap1 |> 
-  pivot_longer(-c(age,sex),names_to = "from_to", values_to = "p") 
-p2l <- p_tibble_extrap2 |>
-  pivot_longer(-age,names_to = "from_to", values_to = "p") 
-p3l <- p_tibble_extrap3 |> 
-  pivot_longer(-c(sex,age),names_to = "from_to", values_to = "p") 
-p4l <- p_tibble_extrap4 |> 
-  pivot_longer(-age,names_to = "from_to", values_to = "p")
-
-bind_rows(p1l,p2l,p3l,p4l) |> 
-  ggplot(aes(x=age,y=p,color=from_to,linetype=sex)) +
-  geom_line() +
-  facet_wrap(~variant) +
-  theme_minimal()
-
-# p_tibble_extrap %>% 
-#   pivot_longer(-1,names_to = "from_to", values_to = "p") %>% 
-#   ggplot(aes(x=age,y=p,color = from_to)) +
-#   geom_line()
-
-# Magda
-p_tibble_extrap <-
-  p_tibble_extrap4 |> 
-  filter(age <=110)
-
-# Angelo
-p_tibble_extrap <-
-  p_tibble_extrap1|> 
-  filter(sex=="m")
-
-# Lievre
-p_tibble_extrap <-
-  p_tibble_extrap3 |> 
-  filter(sex=="m")
-
-# Folyn SRH HRS
-p_tibble_extrap <-
-  p_tibble_extrap2 
-
-# Muszynska-Spielauer HRS ADL
-p_tibble_extrap <-
-  p_tibble_extrap5 |> 
-  filter(age <=110)
-p_tibble_extrap <-
-  p_tibble_extrap6 |> 
-  filter(age <=110)
-p_tibble_extrap <-
-  p_tibble_extrap7 |> 
-  filter(age <=110)
+hrs_all <- bind_rows(srh, adl_iadl)
 
 # ensure not a leaky system
-p_tibble_extrap <-
-  p_tibble_extrap |>
+hrs_all <-
+  hrs_all |>
   # positive col range ensures it'll work with or without sex, age, variant cols
-  pivot_longer(c(HU,HD,HH,UH,UU,UD), names_to = "from_to", values_to = "p") |>
+  pivot_longer(-c(measure,sex,race,age), names_to = "from_to", values_to = "p") |>
   mutate(from = substr(from_to,1,1)) |> 
-  group_by(age, from) |>
+  group_by(measure, sex, race, age, from) |>
   mutate(p = p / sum(p)) |>
   ungroup() |>
   select(-from) |>
   pivot_wider(names_from = from_to, values_from = p)
 
+hrs_all |>
+  # positive col range ensures it'll work with or without sex, age, variant cols
+  pivot_longer(c(HU,HD,HH,UH,UU,UD), names_to = "from_to", values_to = "p") |>
+  ggplot(aes(x=age,y=p,color=from_to,linetype=sex))+
+  geom_line() +
+  facet_wrap(race~measure)
 
-# step 1: count spells by starting age.
-p_tibble_extrap |> nrow()
-
-# 61 ages, now brute force impossible.
-hh <- p_tibble_extrap$HH
-uh <- p_tibble_extrap$UH
-uu <- p_tibble_extrap$UU
-hu <- p_tibble_extrap$HU
-
-n    <- nrow(p_tibble_extrap)
-
-lu   <- c(init["U"], rep(0, n))
-lh   <- c(init["H"], rep(0, n))
-
-# init <- c(H=.9, U = .1)
-init <- p_tibble_extrap |> 
-  filter(age == 50) |> 
-  init_constant()
-
-for (i in 1:n) {
-  lu[i + 1] <- lu[i] * uu[i] + lh[i] * hu[i]
-  lh[i + 1] <- lh[i] * hh[i] + lu[i] * uh[i]
-}
-
+# eyeball major differences in e50;
+# LE does not need to match between specifications:
+# SRH came from different HRS year range; different state spaces
+# also give different results
+hrs_all |>
+  group_by(measure, sex, race) |>
+  do(calc_ex_simple(p_tibble=.data))
 # New spells of H must start from U or initial age of H
-sum(lu) + sum(lh)
 
-HLE <- sum(lh)
-ULE <- sum(lu)
-LE  <- HLE + ULE
-
-# spell termination probabilities
-hend <- c(1 - hh, 1) # 1 for closeout
-
-# ------------------------ #
-# re-considered. If we iterate up the ages, summing units
-# into cumulative occupation time distributions, then I think we 
-# have it.
-
-# namely, the stock at a given age can be divided into bins iteratively.
-# 0,1        init & 1st age
-# 0,1,2      2nd age
-# 0,1,2,3    3rd age
-# ...
-# each of these is a full distribution on reference state s.
-# but the next iteration of the distribution only depends on current
-# state s and age a. 
-#
-
-# plot(50:111,lu,ylim=c(0,1),type='l',col="red",ylab="lxs",xlab="age")
-# lines(50:111,lh)
+# Calculate dxh for all subsets
+d_out <-
+  hrs_all |>
+  group_by(measure, sex, race) |>
+  do(calc_dxh(p_tibble=.data))
 
 
-calculate.this <- FALSE
-if (calculate.this){
-
-d3 <- expand.grid(h = 0:61,
-                  age = 50:111,
-                  current_state = c("H","U"),
-                  l = 0,
-                  stringsAsFactors = FALSE) |>
-  fsubset(h <= (age - 50)) |>
-  fmutate(l = data.table::fcase(
-    age == 50 & current_state == "H" , init["H"],
-    age == 50 & current_state == "U" , init["U"],
-    default = 0))
-
-
-tic()
-for (a in 50:110) {
-  
-  d3n         <- fsubset(d3, age == a)
-  possible_ds <- unique(d3n$h) |> sort()
-  dt          <- fsubset(p_tibble_extrap,age == a)
-  
-  HH <- dt$HH
-  HU <- dt$HU
-  UU <- dt$UU
-  UH <- dt$UH
-  
-  for (d in possible_ds) {
-    
-    d3nd <- fsubset(d3n, h == d)
-    lxhH <- fsubset(d3nd, current_state == "H")$l
-    lxhU <- fsubset(d3nd, current_state == "U")$l
-      
-    d3 <- d3 |>
-      fmutate(l = fcase(
-        age == a + 1 & h == d + 1 & current_state == "H", l + lxhH * HH + lxhU * UH,
-        age == a + 1 & h == d     & current_state == "U", l + lxhU * UU + lxhH * HU,
-        rep_len(TRUE, length(l)), l))
-  }
-}
-
-toc()
-
-# sum checks
-d_out <- p_tibble_extrap |>
-  select(age, HD, UD) |>
-  rename(H = HD, 
-         U = UD) |>
-  pivot_longer(c(H, U), 
-               names_to  = "current_state", 
-               values_to = "qx") |> 
-  right_join(d3, by = c("age", "current_state"), multiple = "all") |>
-  mutate(qx  = ifelse(age == 111, 1, qx),
-         dxs = qx * l,
-         x   = age - 50,
-         u   = x - h) |> 
-  select(current_state, age, x, h, u, lxsc = l, dxsc = dxs)
-
-# 
-d3 |> write_csv("d3.csv")
-d_out |> write_csv("d_out.csv")
-}
-
-
-d3 <- read_csv("d3.csv")
-
-d_out$dxsc |> sum()
 
 # variance checks
 d_out |>
+  group_by(measure, sex, race) |>
   mutate(le = sum(x * dxsc),
          mh = sum(h * dxsc),
          mu = sum(u * dxsc)) |>
-  summarize(vle    = sum((x - le) ^ 2 * dxsc),
+  summarize(hle    = sum(lxsc[current_state == "H"]),
+            ule    = sum(lxsc[current_state == "U"]),
+            le     = sum(lxsc),
+            vle    = sum((x - le) ^ 2 * dxsc),
             vh     = sum((h - mh) ^ 2 * dxsc),
             vu     = sum((u - mu) ^ 2 * dxsc),
             cov_hu = sum((h - mh) * (u - mu) * dxsc)) |>
@@ -264,6 +64,7 @@ d_out |>
 
 # mean distance variants 
 d_out |>
+  group_by(measure, sex, race) |>
   mutate(le = sum(x * dxsc),
          mh = sum(h * dxsc),
          mu = sum(u * dxsc),
@@ -276,14 +77,16 @@ d_out |>
 
 #
 d_out_summarized <- d_out |>
-  group_by(h, u) |>
+  group_by(measure, sex, race, h, u) |>
   summarize(dxsc = sum(dxsc), .groups = "drop") 
 
 d_mode <- d_out_summarized |>
+  group_by(measure, sex, race) |>
   filter(dxsc == max(dxsc))
 
 # ------------------------------------------------------------------------------ #
-main_plot <- d_out_summarized |>
+
+d_out_summarizedi |>
   ggplot(aes(x = h,
              y = u,
              z = dxsc)) +
