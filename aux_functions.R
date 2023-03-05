@@ -1,3 +1,8 @@
+library(colorspace)
+library(data.table)
+library(tidyverse)
+library(collapse) # for fsubset(), fast subsetting
+library(tictoc)
 
 init_constant <- function(x){
   u <- matrix(x[c("HH","UH","HU","UU")] %>% unlist(),2,byrow=TRUE)
