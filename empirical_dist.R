@@ -2,90 +2,174 @@
 
 source("aux_functions.R")
 
-adl_iadl <- read_csv("hrs_adl_iadl_all.csv", show_col_types= FALSE) |>
-  mutate(race = "all", .before=2)
-srh <- read_csv("foltyn_hrs_transitions.csv", show_col_types= FALSE) |>
-  mutate(measure = "SRH", .before = 1)
-
-hrs_all <- bind_rows(srh, adl_iadl)
+# adl_iadl <- read_csv("hrs_adl_iadl_all.csv", show_col_types= FALSE) |>
+#   mutate(race = "all", .before=2)
+# srh <- read_csv("foltyn_hrs_transitions.csv", show_col_types= FALSE) |>
+#   mutate(measure = "SRH", .before = 1)
+# 
+# hrs_all <- bind_rows(srh, adl_iadl)
 
 # ensure not a leaky system
-hrs_all <-
-  hrs_all |>
+share_all <- 
+  read_csv("share_all.csv",show_col_types = FALSE) |> 
+  select(-version) 
+  
+
+share_all <-
+  share_all |>
   # positive col range ensures it'll work with or without sex, age, variant cols
-  pivot_longer(-c(measure,sex,race,age), names_to = "from_to", values_to = "p") |>
-  mutate(from = substr(from_to,1,1)) |> 
-  group_by(measure, sex, race, age, from) |>
+  pivot_longer(-c(country, sex, measure,age), names_to = "from_to", values_to = "p") |>
+  mutate(from = substr(from_to,1,1),
+         to = substr(from_to,2,2)) |> 
+  group_by(measure, sex, age, from) |>
   mutate(p = p / sum(p)) |>
   ungroup() |>
-  select(-from) |>
+  mutate(p = case_when(age == max(age) & to == "D" ~ 1,
+                       age == max(age) & to != "D" ~ 0,
+                       TRUE ~ p)) |> 
+  select(-from, -to) |>
   pivot_wider(names_from = from_to, values_from = p)
 
-hrs_all |>
+share_all |>
   # positive col range ensures it'll work with or without sex, age, variant cols
-  pivot_longer(c(HU,HD,HH,UH,UU,UD), names_to = "from_to", values_to = "p") |>
-  ggplot(aes(x=age,y=p,color=from_to,linetype=sex))+
+  pivot_longer(c(HU,HD,HH,UH,UU,UD), names_to = "from-to", values_to = "p") |>
+  ggplot(aes(x=age,y=p,color=`from-to`,linetype=sex))+
   geom_line() +
-  facet_wrap(race~measure)
+  facet_wrap(~measure) +
+  xlim(50,119) +
+  theme_minimal()
+
+share_all |>
+  filter(measure == "SRH") |> 
+  # positive col range ensures it'll work with or without sex, age, variant cols
+  pivot_longer(c(HU,HD,HH,UH,UU,UD), names_to = "from-to", values_to = "p") |>
+  ggplot(aes(x=age,y=p,color=`from-to`,linetype=sex))+
+  geom_line() +
+  theme_minimal() +
+  xlim(50,119) +
+  theme(text = element_text(size=20))
+
 
 # eyeball major differences in e50;
 # LE does not need to match between specifications:
 # SRH came from different HRS year range; different state spaces
 # also give different results
-hrs_all |>
-  group_by(measure, sex, race) |>
-  do(calc_ex_simple(p_tibble=.data))
+(expectancies <- 
+    share_all |>
+  group_by(measure, sex) |>
+  do(calc_ex_simple(p_tibble=.data)))
 # New spells of H must start from U or initial age of H
 
 # Calculate dxh for all subsets
 d_out <-
-  hrs_all |>
-  group_by(measure, sex, race) |>
-  do(calc_dxh(p_tibble=.data))
+  share_all |>
+  group_by(measure, sex) |>
+  do(calc_dxh(p_tibble=.data)) |> 
+  ungroup() |> 
+  filter(age <=120)
 
-
-
+d_out |> group_by(measure,sex) |> 
+  summarize(check = sum(dxsc)) |> pull(check)
+d_out
 # variance checks
 d_out |>
-  group_by(measure, sex, race) |>
-  mutate(le = sum(x * dxsc),
-         mh = sum(h * dxsc),
-         mu = sum(u * dxsc)) |>
-  summarize(hle    = sum(lxsc[current_state == "H"]),
-            ule    = sum(lxsc[current_state == "U"]),
-            le     = sum(lxsc),
-            vle    = sum((x - le) ^ 2 * dxsc),
-            vh     = sum((h - mh) ^ 2 * dxsc),
-            vu     = sum((u - mu) ^ 2 * dxsc),
-            cov_hu = sum((h - mh) * (u - mu) * dxsc)) |>
-  mutate(vle_check = vh + vu + 2 * cov_hu)
+  group_by(measure, sex) |>
+  # mutate(le = sum((x + .5) * dxsc),
+  #        hle = sum((h + .5) * dxsc),
+  #        ule = sum((u + .5) * dxsc)) |>
+  summarize(
+    # le = sum((x + .5) * dxsc),
+    # hle = sum((h + .5) * dxsc),
+    # ule = sum((u + .5) * dxsc),
+             hle    = sum(lxsc[current_state == "H"])-.5,
+             ule    = sum(lxsc[current_state == "U"])-.5,
+             le     = sum(lxsc)-.5,
+            vle    = sum(((x+.5) - le) ^ 2 * dxsc),
+            vh     = sum(((h+.5) - hle) ^ 2 * dxsc),
+            vu     = sum(((u+.5) - ule) ^ 2 * dxsc),
+            cov_hu = sum(((h+.5) - hle) * ((u+.5) - ule) * dxsc)) |>
+  mutate(vle_check = vh + vu + 2 * cov_hu) |> View()
 
 
+d_out |> 
+  filter(sex == "female", measure == "ADL") |> 
+  mutate(h = h - h %% 5) |> 
+  group_by(age,h) |> 
+  summarize(lxh = sum(lxsc), .groups = "drop") |>
+  mutate(Cxh = lxh / sum(lxh)) |> 
+  ggplot(aes(x=age,y=Cxh,fill=h))+
+  geom_col(width=1) +
+  scale_fill_continuous_sequential() +
+  theme_minimal() +
+  theme(text = element_text(size=20))
 
 # mean distance variants 
 d_out |>
-  group_by(measure, sex, race) |>
-  mutate(le = sum(x * dxsc),
-         mh = sum(h * dxsc),
-         mu = sum(u * dxsc),
-         euc_dist = sqrt((mh - h)^2 + (mu - u) ^2),
-         man_dist = abs(mh - h) + abs(mu - u),
-         cheb_dist = pmax(abs(mh - h), abs(mu - u))) |> 
+  group_by(measure, sex) |>
+  mutate(le = sum((x+.5) * dxsc),
+         mh = sum((h+.5) * dxsc),
+         mu = sum((u+.5) * dxsc),
+         euc_dist = sqrt((mh - (h+.5))^2 + (mu - (u+.5)) ^2),
+         man_dist = abs(mh - (h+.5)) + abs(mu - (u+.5)),
+         cheb_dist = pmax(abs(mh - (h+.5)), abs(mu - (u+.5)))) |> 
   summarize(man = sum(dxsc * man_dist),
             euc = sum(dxsc * euc_dist),
             cheb = sum(dxsc * cheb_dist))
 
 #
 d_out_summarized <- d_out |>
-  group_by(measure, sex, race, h, u) |>
+  group_by(measure, sex, h, u) |>
   summarize(dxsc = sum(dxsc), .groups = "drop") 
 
-d_mode <- d_out_summarized |>
-  group_by(measure, sex, race) |>
+dout_fine <- expand.grid(h = seq(0,60,by=.1),
+                         u = seq(0,60,by=.1)) |> 
+  filter(h+u < 60)
+d_for_mode <-
+  d_out_summarized |> 
+  filter(measure == "ADL") %>% 
+  gam(log(dxsc) ~ te(h, u, k = c(20,20)), data = .,
+      method = 'ML') |> 
+  predict(newdata=dout_fine) |> 
+  as_tibble() |> 
+  rename(dxsc=value) |> 
+  bind_cols(dout_fine)
+
+d_for_mode |> 
+  ggplot(aes(x=h,y=u,fill=exp(dxsc)) )+
+  geom_tile()
+
+d_mode <- d_for_mode |>
   filter(dxsc == max(dxsc))
 
-# ------------------------------------------------------------------------------ #
+d_for_mode |> 
+  group_by(h) |> 
+  summarize(dxsc = sum(exp(dxsc)),.groups = "drop") |> 
+  filter(dxsc==max(dxsc))
 
+d_for_mode |> 
+  group_by(u) |> 
+  summarize(dxsc = sum(exp(dxsc)),.groups = "drop") |> 
+  filter(dxsc==max(dxsc))
+
+d_for_mode |> 
+  mutate(x=h+u) |> 
+  group_by(x) |> 
+  summarize(dxsc = sum(exp(dxsc)),.groups = "drop") |> 
+  filter(dxsc==max(dxsc))
+
+# ------------------------------------------------------------------------------ #
+d_out_summarizedi <-
+  d_out_summarized |> 
+  filter(measure == "ADL", race == "all", sex == "m")
+
+d_modei <-
+  d_mode |> 
+  filter(measure == "ADL", race == "all", sex == "m")
+
+HLEi <- expectancies |> 
+  filter(measure == "ADL", race == "all", sex == "m")
+
+p <-
 d_out_summarizedi |>
   ggplot(aes(x = h,
              y = u,
@@ -97,7 +181,8 @@ d_out_summarizedi |>
   theme(panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
         axis.text.y      = element_text(margin = margin(r = -17)),
-        axis.text.x      = element_text(margin = margin(t = -40))) +
+        axis.text.x      = element_text(margin = margin(t = -40)),
+        text = element_text(size=20)) +
   # custom Lexis-ish grid
   annotate(geom  ="segment",
            x     = seq(0, 60, by = 10),
@@ -119,103 +204,161 @@ d_out_summarizedi |>
            y     = seq(0, 60, by = 20) + 2, 
            label = seq(50, 110, by = 20),
            angle = -45,
-           size  = 3) +
+           size  = 5) +
   annotate(geom  = "text",
-           x     = 0,
-           y     = 65,
+           x     = 5,
+           y     = 60,
            label = "age at death",
-           angle = -45) +
+           angle = -45,
+           size  = 5) +
   metR::geom_contour2(aes(label = after_stat(level)), color = "#00000050", size = 0.5) +
   labs(x = "healthy years (h)",
        y = "unhealthy years (u)") +
-  geom_point(aes(x = HLE, 
-                 y = ULE),
-             color = "#f0941d") +
+  geom_point(aes(x = HLEi$HLE, 
+                 y = HLEi$ULE),
+             color = "#f0941d",
+             size=2) +
   # HLE arrow
   annotate(geom     = "segment", 
-           x        = HLE, 
-           xend     = HLE, 
+           x        = HLEi$HLE, 
+           xend     = HLEi$HLE, 
            y        = 45, 
            yend     = 38,
            arrow    = arrow(type = "closed", length = unit(0.02, "npc"))) +
   annotate(geom     = "text",
-           x        = HLE, 
+           x        = HLEi$HLE, 
            y        = 48, 
-           label    = paste0("HLE\n(", sprintf("%.2f", round(HLE, 2)),")")) + 
+           label    = paste0("HLE\n(", sprintf("%.2f", round(HLEi$HLE, 2)),")"),
+           size     = 5) + 
   annotate(geom     = "segment",
-           x        = HLE,
-           xend     = HLE,
-           y        = ULE,
+           x        = HLEi$HLE,
+           xend     = HLEi$HLE,
+           y        = HLEi$ULE,
            yend     = 37,
            linetype = 2, 
-           color    = "#FFFFFF50") +
+           color    = "#11111150") +
   # ULE arrow
   annotate(geom     = "segment",
            x        = 45,
            xend     = 38,
-           y        = ULE,
-           yend     = ULE,
+           y        = HLEi$ULE,
+           yend     = HLEi$ULE,
            arrow    = arrow(type = "closed", length = unit(0.02, "npc")))  +
   annotate(geom     = "text",
-           y        = ULE, 
+           y        = HLEi$ULE, 
            x        = 48, 
-           label    = paste0("ULE\n(", round(ULE, 2), ")")) + 
+           label    = paste0("ULE\n(", round(HLEi$ULE, 2), ")"),
+           size     = 5) + 
   annotate(geom     = "segment",
-           y        = ULE,
-           yend     = ULE,
-           x        = HLE,
+           y        = HLEi$ULE,
+           yend     = HLEi$ULE,
+           x        = HLEi$HLE,
            xend     = 37,
            linetype = 2, 
-           color    = "#FFFFFF50") +
+           color    = "#11111150") +
   # LE arrow
   annotate(geom     = "segment",
-           x        = LE + 2,
-           xend     = LE - 5,
+           x        = HLEi$LE + 2,
+           xend     = HLEi$LE - 5,
            y        = -2,
            yend     = 5,
          arrow      = arrow(type = "closed", length = unit(0.02, "npc"))) +
   annotate(geom     = "text",
            y        = -4, 
-           x        = LE + 2,
-           label    = paste0("LE (", round(LE, 2), ")")) +
+           x        = HLEi$LE + 2,
+           label    = paste0("LE (", round(HLEi$LE, 2), ")"),
+           size =5) +
   annotate(geom     = "segment",
-           x        = LE-6,
-           xend     = HLE,
+           x        = HLEi$LE-6,
+           xend     = HLEi$HLE,
            y        = 6,
-           yend     = ULE,
+           yend     = HLEi$ULE,
            linetype = 2, 
-           color    = "#FFFFFF50") +
+           color    = "#11111150") +
   # label the mean
   geom_curve(
 
     aes(x     = 40, 
         y     = 30, 
-        xend  = HLE + 1, 
-        yend  = ULE),
+        xend  = HLEi$HLE + 1, 
+        yend  = HLEi$ULE),
     arrow     = arrow(length = unit(0.02, "npc")),
     ncp       = 20,
-    linewidth = .25,
+    linewidth = .3,
     curvature = -.2,
     color = "#f0941d"
   ) +
   annotate(geom  = "text",
            x     = 44, 
            y     = 28, 
-           label = paste0("Mean\n(", sprintf("%.2f", round(HLE, 2)), ",", round(ULE, 2), ")")) +
-# label the mode
-  geom_point(data  = d_mode,
-             aes(x = h, 
-                 y = u),
-             color = "#ebedbb") +
-  geom_curve(
-    aes(x = 35, y = 40, xend = d_mode$h, yend = d_mode$u+1),
-    arrow = arrow(length = unit(0.02, "npc")),
-    ncp = 20,
-    linewidth = .25,
-    curvature = .2
-  ) +
-  annotate("text",x = 39, y = 41, label = paste0("Mode (integer for now)\n(",d_mode$h,", ",d_mode$u,")"))
-main_plot + labs(title = "HRS w12 males adl")
+           label = paste0("Mean\n(", sprintf("%.2f", round(HLEi$HLE, 2)), ",", round(HLEi$ULE, 2), ")"),
+           size  = 5) 
+
+
+  ggsave("p5.png",p,width=7,height=7,units="in")
+  
+  dhi <-
+  d_out_summarizedi |> 
+    group_by(h) |> 
+    summarize(dh = sum(dxsc))
+  dui <-
+    d_out_summarizedi |> 
+    group_by(u) |> 
+    summarize(du = sum(dxsc))
+  dxi<-
+    d_out_summarizedi |> 
+    mutate(x=h+u) |> 
+    group_by(x) |> 
+    summarize(dx = sum(dxsc))
+  
+  p1<-
+  dhi |> 
+    ggplot(aes(x=h,y=dh)) +
+    geom_line() +
+    theme_minimal() +
+    theme(text = element_text(size=20))+
+    geom_area(fill = "#aaCCaa")+
+    ylim(0,.18)+
+    labs(title="d(h)")
+  p2<- 
+  dui|> 
+    ggplot(aes(x=u,y=du)) +
+    geom_line()+
+    theme_minimal() +
+    theme(text = element_text(size=20)) +
+    geom_area(fill = "#CCaaaa")+
+    ylim(0,.18)+
+    labs(title="d(u)")
+  
+  p3<-
+  dxi|> 
+    ggplot(aes(x=x,y=dx)) +
+    geom_line()+
+    theme_minimal() +
+    theme(text = element_text(size=20)) +
+    geom_area(fill = "#aaaaCC")+
+    ylim(0,.18)+
+    labs(title="d(x)")
+  library(patchwork)
+pout <- p1 | p2 | p3
+ggsave("p3.png",pout,width=11,height=7)    
+dhi |> 
+  mutate()
+  # label the mode
+  # geom_point(data  = d_modei,
+  #            aes(x = h, 
+  #                y = u),
+  #            color = "#ebedbb") +
+  # geom_curve(
+  #   aes(x = 35, y = 40, xend = d_modei$h, yend = d_modei$u+1),
+  #   arrow = arrow(length = unit(0.02, "npc")),
+  #   ncp = 20,
+  #   linewidth = .25,
+  #   curvature = .2
+  # ) +
+  # annotate("text",x = 39, y = 41, 
+  #          label = paste0("Mode (integer for now)\n(",d_modei$h,", ",d_modei$u,")"))
+# main_plot + labs(title = "HRS w12 males adl")
 # ggsave(main_plot,filename = "main_plot.svg", width = 6,height=7,units="in")
 
 

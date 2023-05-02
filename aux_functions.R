@@ -3,6 +3,7 @@ library(data.table)
 library(tidyverse)
 library(collapse) # for fsubset(), fast subsetting
 library(tictoc)
+library(tidyfast)
 
 init_constant <- function(x){
   u <- matrix(x[c("HH","UH","HU","UU")] %>% unlist(),2,byrow=TRUE)
@@ -44,13 +45,13 @@ Ptibble2U <- function(Ptibble) {
     
     age <- c(age, age[length(age)] + 1)
     pre <- Ptibble |>
-      pivot_longer(-age, 
+      dt_pivot_longer(-age, 
                    names_to  = "fromto", 
                    values_to = "p") |>
-      mutate(from = substr(fromto, 0, 1),
+      fmutate(from = substr(fromto, 0, 1),
              to   = substr(fromto, 2, 2)) |>
-      select(-fromto) |>
-      filter(to != "D")
+      fselect(-fromto) |>
+      fsubset(to != "D")
     
     states <- pre$from |>
       unique()
@@ -58,17 +59,17 @@ Ptibble2U <- function(Ptibble) {
     pre |>
       group_by(from, to) |>
       nest() |>
-      mutate(data = map(data, ~ .x |>
+      fmutate(data = map(data, ~ .x |>
                           pi_block_outer())) |> 
-      pivot_wider(names_from  = from, 
-                  values_from = data) |>
+      dt_pivot_wider(names_from  = from, 
+                  values_from = data) |> 
       unnest(cols = all_of(states),
-             names_sep = "") |>
-      ungroup() |>
-      mutate(to = paste(rep(states, each = length(age)), 
-                        rep(age,    each = length(states)), # each
-                        sep = "_")) |>
-      column_to_rownames("to") |>
+             names_sep = "") |> 
+      ungroup() |> 
+      fmutate(to = paste(rep(states, each = length(age)), 
+                        rep(age,    length(states)), # each
+                        sep = "_")) |> 
+      column_to_rownames("to") |> 
       as.matrix()
     }
 
@@ -183,7 +184,7 @@ calc_dxh <- function(p_tibble){
                  names_to  = "current_state", 
                  values_to = "qx") |> 
     right_join(d3, by = c("age", "current_state"), multiple = "all") |>
-    mutate(qx  = ifelse(age == 111, 1, qx),
+    mutate(qx  = ifelse(age == max(age), 1, qx),
            dxs = qx * l,
            x   = age - 50,
            u   = x - h) |> 
