@@ -68,6 +68,21 @@ d_out <-
   ungroup() |> 
   filter(age <=120)
 
+library(ggridges)
+d_out |> 
+  filter(measure == "SRH") |> 
+  group_by(h,u) |> 
+  summarize(lxsc = sum(lxsc),
+            dxsc = sum(dxsc)) |> 
+  filter(u %% 5 == 0) |> 
+  ggplot(aes(x = h, height = lxsc, y = as.factor(u))) +
+  geom_ridgeline(scale=5, alpha = .3, fill = "#1133FF",col = "#1133FF") # +
+ # metR::geom_contour2(aes(label = after_stat(level)), color = "#00000050", size = 0.5) 
+
+
+
+
+
 d_out |> group_by(measure,sex) |> 
   summarize(check = sum(dxsc)) |> pull(check)
 d_out
@@ -160,17 +175,18 @@ d_for_mode |>
 # ------------------------------------------------------------------------------ #
 d_out_summarizedi <-
   d_out_summarized |> 
-  filter(measure == "ADL", race == "all", sex == "m")
+  filter(measure == "ADL",  sex == "female")
 
-d_modei <-
-  d_mode |> 
-  filter(measure == "ADL", race == "all", sex == "m")
+# d_modei <-
+#   d_mode |> 
+#   filter(measure == "GALI", sex == "female")
 
 HLEi <- expectancies |> 
-  filter(measure == "ADL", race == "all", sex == "m")
+  filter(measure == "ADL", sex == "female")
 
 p <-
 d_out_summarizedi |>
+  filter(h <= 60, u <= 60, (h+u) <= 60) |> 
   ggplot(aes(x = h,
              y = u,
              z = dxsc)) +
@@ -264,8 +280,8 @@ d_out_summarizedi |>
            yend     = 5,
          arrow      = arrow(type = "closed", length = unit(0.02, "npc"))) +
   annotate(geom     = "text",
-           y        = -4, 
-           x        = HLEi$LE + 2,
+           y        = -3, 
+           x        = HLEi$LE + 6,
            label    = paste0("LE (", round(HLEi$LE, 2), ")"),
            size =5) +
   annotate(geom     = "segment",
@@ -290,12 +306,11 @@ d_out_summarizedi |>
   ) +
   annotate(geom  = "text",
            x     = 44, 
-           y     = 28, 
+           y     = 32, 
            label = paste0("Mean\n(", sprintf("%.2f", round(HLEi$HLE, 2)), ",", round(HLEi$ULE, 2), ")"),
            size  = 5) 
-
-
-  ggsave("p5.png",p,width=7,height=7,units="in")
+p
+  ggsave("share_adl_females.svg",p,width=7,height=7,units="in")
   
   dhi <-
   d_out_summarizedi |> 
