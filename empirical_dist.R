@@ -6,7 +6,6 @@ source("aux_functions.R")
 #   mutate(race = "all", .before=2)
 # srh <- read_csv("foltyn_hrs_transitions.csv", show_col_types= FALSE) |>
 #   mutate(measure = "SRH", .before = 1)
-# 
 # hrs_all <- bind_rows(srh, adl_iadl)
 
 # ensure not a leaky system
@@ -49,24 +48,44 @@ share_all |>
   xlim(50,119) +
   theme(text = element_text(size=20))
 
+d_out_share <-
+  share_all |>
+  group_by(measure, sex) |>
+  do(calc_dxh(p_tibble=.data)) |> 
+  ungroup() 
+
+hrs_all <- read_csv("imach/hrs_adl_iadl_sex_period_all.csv")
 
 # eyeball major differences in e50;
 # LE does not need to match between specifications:
 # SRH came from different HRS year range; different state spaces
 # also give different results
 (expectancies <- 
-    share_all |>
-  group_by(measure, sex) |>
+    hrs_all |>
+  group_by(measure, sex,period) |>
   do(calc_ex_simple(p_tibble=.data)))
+
+expectancies |> 
+  ggplot(aes(x=period,y=LE,color = sex)) +
+  geom_line() +
+  facet_wrap(~measure)
 # New spells of H must start from U or initial age of H
 
 # Calculate dxh for all subsets
 d_out <-
-  share_all |>
-  group_by(measure, sex) |>
+  hrs_all |>
+  group_by(measure, sex, period) |>
   do(calc_dxh(p_tibble=.data)) |> 
+  ungroup() 
+
+d_out_inaki <-
+  d_out |> 
   ungroup() |> 
-  filter(age <=120)
+  group_by(measure,sex,period,age,x,h,u) |> 
+  summarize(lsxc = sum(lxsc),
+         dsxc = sum(dxsc), .groups = "drop")
+
+write_csv(d_out_inaki,"d_out_inaki.csv")
 
 library(ggridges)
 d_out |> 
@@ -312,6 +331,11 @@ d_out_summarizedi |>
 p
   ggsave("share_adl_females.svg",p,width=7,height=7,units="in")
   
+  d_out_summarizedi <- d_out_share |>
+    group_by(measure, sex, h, u) |>
+    summarize(dxsc = sum(dxsc), .groups = "drop") |> 
+    filter(measure == "ADL", sex == "female")
+  
   dhi <-
   d_out_summarizedi |> 
     group_by(h) |> 
@@ -333,7 +357,7 @@ p
     theme_minimal() +
     theme(text = element_text(size=20))+
     geom_area(fill = "#aaCCaa")+
-    ylim(0,.18)+
+    ylim(0,.1)+
     labs(title="d(h)")
   p2<- 
   dui|> 
@@ -342,7 +366,7 @@ p
     theme_minimal() +
     theme(text = element_text(size=20)) +
     geom_area(fill = "#CCaaaa")+
-    ylim(0,.18)+
+    ylim(0,.1)+
     labs(title="d(u)")
   
   p3<-
@@ -352,13 +376,12 @@ p
     theme_minimal() +
     theme(text = element_text(size=20)) +
     geom_area(fill = "#aaaaCC")+
-    ylim(0,.18)+
+    ylim(0,.1)+
     labs(title="d(x)")
   library(patchwork)
 pout <- p1 | p2 | p3
 ggsave("p3.png",pout,width=11,height=7)    
-dhi |> 
-  mutate()
+
   # label the mode
   # geom_point(data  = d_modei,
   #            aes(x = h, 

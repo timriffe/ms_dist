@@ -191,3 +191,9 @@ calc_dxh <- function(p_tibble){
     select(current_state, age, x, h, u, lxsc = l, dxsc = dxs)
   d_out
 }
+
+plot_dhu <- function(data){
+  # data should be of the form d_out, for a single strata,
+  # including columns h,u, and dsxc
+  
+}
