@@ -44,18 +44,18 @@ pi_block_outer <- function(chunk) {
     as_tibble()
   }
 
-#' @title Ptibble2U
+#' @title p_tibble2U
 #' @description Produce the transient matrix `U` based on a tidy `data.frame` of transition probabilities.
-#' @param Ptibble a `data.frame` with columns `age`, and columns containing transitions, where column names are two concatenated letters where the first letter gives the origin state and the second letter gives the destination state.
+#' @param p_tibble a `data.frame` with columns `age`, and columns containing transitions, where column names are two concatenated letters where the first letter gives the origin state and the second letter gives the destination state.
 #' @return matrix `U` composed of submatrices for each transition.
-Ptibble2U <- function(Ptibble) {
+p_tibble2U <- function(p_tibble) {
   
-    age <- Ptibble[["age"]] |>
+    age <- p_tibble[["age"]] |>
       unique() |>
       sort()
     
     age <- c(age, age[length(age)] + 1)
-    pre <- Ptibble |>
+    pre <- p_tibble |>
       dt_pivot_longer(-age, 
                    names_to  = "fromto", 
                    values_to = "p") |>
@@ -83,14 +83,14 @@ Ptibble2U <- function(Ptibble) {
       column_to_rownames("to") |> 
       as.matrix()
     }
-#' @title Ptibble2N
+#' @title p_tibble2N
 #' @description Produce the fundamental matrix `N` based on a tidy `data.frame` of transition probabilities.
-#' @param Ptibble a `data.frame` with columns `age`, and columns containing transitions, where column names are two concatenated letters where the first letter gives the origin state and the second letter gives the destination state.
+#' @param p_tibble a `data.frame` with columns `age`, and columns containing transitions, where column names are two concatenated letters where the first letter gives the origin state and the second letter gives the destination state.
 #' @return the fundamental matrix, `N`, containing age-state conditional survivorship values
 
-Ptibble2N <- function(Ptibble, discount = FALSE) {
+p_tibble2N <- function(p_tibble, discount = FALSE) {
   
-  U <- Ptibble2U(Ptibble)
+  U <- p_tibble2U(p_tibble)
   I <- diag(rep(1, nrow(U)))
   N <- solve(I - U) 
   if (discount) {
@@ -99,17 +99,17 @@ Ptibble2N <- function(Ptibble, discount = FALSE) {
   return(N)
   }
 
-#' @title Ptibble2lxs
+#' @title p_tibble2lxs
 #' @description produce a tidy data.frame of age-state survivorships for a given `state`, duly weighted by some declared initial conditions, `init`.
-#' @param Ptibble a `data.frame` with columns `age`, and columns containing transitions, where column names are two concatenated letters where the first letter gives the origin state and the second letter gives the destination state.
+#' @param p_tibble a `data.frame` with columns `age`, and columns containing transitions, where column names are two concatenated letters where the first letter gives the origin state and the second letter gives the destination state.
 #' @param state character for which state we want `lxs`. Presumably but not necessarily `"H"` or `"U"`
 #' @param init numeric vector giving initial conditions. Elements should be labelled with the state shorthand used, presumably but not necessarily `"H"` and `"U"`.
 #' @return data.frame giving the age-specific values of survivors for the given state
 
-Ptibble2lxs <- function(Ptibble, state = "H", init = c(H = 0.8, U = 0.2)) {
+p_tibble2lxs <- function(p_tibble, state = "H", init = c(H = 0.8, U = 0.2)) {
   
-  age                 <- Ptibble[["age"]] |> min()
-  N                   <- Ptibble2N(Ptibble)
+  age                 <- p_tibble[["age"]] |> min()
+  N                   <- p_tibble2N(p_tibble)
   cols                <- grepl(colnames(N), pattern = age)
   rows                <- grepl(rownames(N), pattern = state)
   to_weight           <- N[rows, cols] 
@@ -134,6 +134,8 @@ Ptibble2lxs <- function(Ptibble, state = "H", init = c(H = 0.8, U = 0.2)) {
     fungroup()
 }
 
+#' @title calc_ex_simple
+#' @description perform simple lifetable
 calc_ex_simple <- function(p_tibble){
   init <- p_tibble |> 
     filter(age == min(age)) |> 
