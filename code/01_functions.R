@@ -1,10 +1,8 @@
-library(colorspace)
-library(data.table)
-library(tidyverse)
-library(collapse) # for fsubset(), fast subsetting
-library(tictoc)
-library(tidyfast)
 
+#' @title init_constant
+#' @description derive initial conditions as function of probabilities in the first time step. This assumes that probabilities in ages prior to the first time step were constant.
+#' @param x numeric vector with named elements `HH`, `UH`, `HU`, `UU`
+#' @return numeric vector of length two with initial composition. `H` gives the fraction healthy at start, and `U` gives the fraction unhealthy at start.
 init_constant <- function(x){
   u <- matrix(x[c("HH","UH","HU","UU")] %>% unlist(),2,byrow=TRUE)
   v <- eigen(u)$vectors[,1]
@@ -13,7 +11,13 @@ init_constant <- function(x){
   init
 }
 
-
+#' @title pi_block
+#' @description Produce a submatrix for a given transition type, to be composed together with other submatrices to form the full transient matrix.
+#' @param p vector of transition probabilities, ordered by age
+#' @param state_from character, the origin state, used for margin labeling.
+#' @param state_to character, the destination state, used for margin labeling.
+#' @param age vector giving the age classes (lower bounds), used for margin labeling.
+#' @return a matrix of dimension `length(p)+1` by `length(p)+1`.
 pi_block <- function(p, state_from, state_to, age) {
   
   state_fromi  <- state_from[1]
@@ -26,7 +30,10 @@ pi_block <- function(p, state_from, state_to, age) {
   dimnames(P)  <- list(to_names, from_names)
   return(P)
   }
-
+#' @title pi_block_outer
+#' @description Produce a submatrix for a given transition type, to be composed together with other submatrices to form the full transient matrix. For use in tidy framework. This function wraps `pi_block()`.
+#' @param chunk data.frame with columns `p`, `from`, `to`, and `age`
+#' @return a tibble of dimension `length(p)+1` by `length(p)+1`.
 pi_block_outer <- function(chunk) {
   
   pi_block(chunk[["p"]] |>
@@ -37,6 +44,10 @@ pi_block_outer <- function(chunk) {
     as_tibble()
   }
 
+#' @title Ptibble2U
+#' @description Produce the transient matrix `U` based on a tidy `data.frame` of transition probabilities.
+#' @param Ptibble a `data.frame` with columns `age`, and columns containing transitions, where column names are two concatenated letters where the first letter gives the origin state and the second letter gives the destination state.
+#' @return matrix `U` composed of submatrices for each transition.
 Ptibble2U <- function(Ptibble) {
   
     age <- Ptibble[["age"]] |>
@@ -72,6 +83,10 @@ Ptibble2U <- function(Ptibble) {
       column_to_rownames("to") |> 
       as.matrix()
     }
+#' @title Ptibble2N
+#' @description Produce the fundamental matrix `N` based on a tidy `data.frame` of transition probabilities.
+#' @param Ptibble a `data.frame` with columns `age`, and columns containing transitions, where column names are two concatenated letters where the first letter gives the origin state and the second letter gives the destination state.
+#' @return the fundamental matrix, `N`, containing age-state conditional survivorship values
 
 Ptibble2N <- function(Ptibble, discount = FALSE) {
   
@@ -83,6 +98,13 @@ Ptibble2N <- function(Ptibble, discount = FALSE) {
   }
   return(N)
   }
+
+#' @title Ptibble2lxs
+#' @description produce a tidy data.frame of age-state survivorships for a given `state`, duly weighted by some declared initial conditions, `init`.
+#' @param Ptibble a `data.frame` with columns `age`, and columns containing transitions, where column names are two concatenated letters where the first letter gives the origin state and the second letter gives the destination state.
+#' @param state character for which state we want `lxs`. Presumably but not necessarily `"H"` or `"U"`
+#' @param init numeric vector giving initial conditions. Elements should be labelled with the state shorthand used, presumably but not necessarily `"H"` and `"U"`.
+#' @return data.frame giving the age-specific values of survivors for the given state
 
 Ptibble2lxs <- function(Ptibble, state = "H", init = c(H = 0.8, U = 0.2)) {
   
@@ -102,13 +124,14 @@ Ptibble2lxs <- function(Ptibble, state = "H", init = c(H = 0.8, U = 0.2)) {
     as.data.frame() |>
     rownames_to_column("age") |>
     as_tibble() |>
-    mutate(age = parse_number(age)) |>
-    pivot_longer(-age, 
+    fmutate(age = parse_number(age)) |>
+    dt_pivot_longer(-age, 
                  names_to  = "init_state", 
                  values_to = "lxs") |>
     left_join(init, by = "init_state") |> 
-    group_by(age) |>
-    summarize(lxs = sum(lxs * init), .groups = "drop")
+    fgroup_by(age) |>
+    fsummarize(lxs = sum(lxs * init)) |> 
+    fungroup()
 }
 
 calc_ex_simple <- function(p_tibble){
