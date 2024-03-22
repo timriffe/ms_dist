@@ -128,9 +128,19 @@ calc_ex_simple <- function(p_tibble){
     lu[i + 1] <- lu[i] * uu[i] + lh[i] * hu[i]
     lh[i + 1] <- lh[i] * hh[i] + lu[i] * uh[i]
   }
-  tibble(HLE = sum(lh),
-         ULE = sum(lu),
-         LE = sum(lh+lu))
+  # experimental: (how does this compare w dudel discount?)
+  lh[1] <- lh[1] * .5
+  lu[1] <- lu[1] * .5
+  
+  HLE <- sum(lh)
+  ULE <- sum(lu)
+ 
+  # H <- HLE / (HLE + ULE)
+  # HLE <- HLE - .5*H
+  # ULE <- ULE - .5*(1-H)
+  tibble(HLE = HLE,
+         ULE = ULE,
+         LE  = HLE + ULE)
 }
 
 calc_dxh <- function(p_tibble){
@@ -192,8 +202,3 @@ calc_dxh <- function(p_tibble){
   d_out
 }
 
-plot_dhu <- function(data){
-  # data should be of the form d_out, for a single strata,
-  # including columns h,u, and dsxc
-  
-}

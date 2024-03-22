@@ -8,7 +8,6 @@ source("aux_functions.R")
 #   mutate(measure = "SRH", .before = 1)
 # hrs_all <- bind_rows(srh, adl_iadl)
 
-# ensure not a leaky system
 share_all <- 
   read_csv("share_all.csv",show_col_types = FALSE) |> 
   select(-version) 
@@ -20,6 +19,7 @@ share_all <-
   pivot_longer(-c(country, sex, measure,age), names_to = "from_to", values_to = "p") |>
   mutate(from = substr(from_to,1,1),
          to = substr(from_to,2,2)) |> 
+  # ensure not a leaky system 
   group_by(measure, sex, age, from) |>
   mutate(p = p / sum(p)) |>
   ungroup() |>
@@ -29,6 +29,7 @@ share_all <-
   select(-from, -to) |>
   pivot_wider(names_from = from_to, values_from = p)
 
+# View all transitions
 share_all |>
   # positive col range ensures it'll work with or without sex, age, variant cols
   pivot_longer(c(HU,HD,HH,UH,UU,UD), names_to = "from-to", values_to = "p") |>
@@ -38,15 +39,31 @@ share_all |>
   xlim(50,119) +
   theme_minimal()
 
+# Make transitions figure for ADL:
+f2 <-
 share_all |>
-  filter(measure == "SRH") |> 
+  filter(measure == "ADL") |> 
   # positive col range ensures it'll work with or without sex, age, variant cols
   pivot_longer(c(HU,HD,HH,UH,UU,UD), names_to = "from-to", values_to = "p") |>
+  mutate(from = substr(`from-to`,1,1),
+         to = substr(`from-to`,2,2)) |> 
   ggplot(aes(x=age,y=p,color=`from-to`,linetype=sex))+
   geom_line() +
   theme_minimal() +
-  xlim(50,119) +
-  theme(text = element_text(size=20))
+  xlim(50,110) +
+  theme(text = element_text(size=20)) +
+  guides(linetype = "none") +
+  facet_wrap(~from)
+
+ggsave("fig2.svg", f2)
+# mortality ratio looks plausible
+share_all |>
+  filter(measure == "ADL") |> 
+  mutate(ratio = UD / HD) |> 
+  ggplot(aes(x=age, y = ratio)) +
+  geom_line() +
+  xlim(50,110) +
+  theme_minimal()
 
 d_out_share <-
   share_all |>
@@ -54,78 +71,91 @@ d_out_share <-
   do(calc_dxh(p_tibble=.data)) |> 
   ungroup() 
 
-hrs_all <- read_csv("imach/hrs_adl_iadl_sex_period_all.csv")
+(expectancies <- 
+    share_all |>
+    group_by(measure, sex) |>
+    do(calc_ex_simple(p_tibble=.data)))
+
+# compare w HMD
+library(HMDHFDplus)
+flt <- readHMDweb("ITA","fltper_1x1", username = Sys.getenv("us"), password = Sys.getenv("pw"))
+
+flt |> 
+  filter(between(Year, 2015, 2017), Age == 50) |> 
+  pull(ex) |> mean()
+# hrs_all <- read_csv("imach/hrs_adl_iadl_sex_period_all.csv")
 
 # eyeball major differences in e50;
 # LE does not need to match between specifications:
 # SRH came from different HRS year range; different state spaces
 # also give different results
-(expectancies <- 
-    hrs_all |>
-  group_by(measure, sex,period) |>
-  do(calc_ex_simple(p_tibble=.data)))
-
-expectancies |> 
-  ggplot(aes(x=period,y=LE,color = sex)) +
-  geom_line() +
-  facet_wrap(~measure)
+# (expectancies <- 
+#     hrs_all |>
+#   group_by(measure, sex,period) |>
+#   do(calc_ex_simple(p_tibble=.data)))
+# 
+# expectancies |> 
+#   ggplot(aes(x=period,y=LE,color = sex)) +
+#   geom_line() +
+#   facet_wrap(~measure)
 # New spells of H must start from U or initial age of H
 
 # Calculate dxh for all subsets
-d_out <-
-  hrs_all |>
-  group_by(measure, sex, period) |>
-  do(calc_dxh(p_tibble=.data)) |> 
-  ungroup() 
+# d_out <-
+#   hrs_all |>
+#   group_by(measure, sex, period) |>
+#   do(calc_dxh(p_tibble=.data)) |> 
+#   ungroup() 
+# 
+# d_out_inaki <-
+#   d_out |> 
+#   ungroup() |> 
+#   group_by(measure,sex,period,age,x,h,u) |> 
+#   summarize(lsxc = sum(lxsc),
+#          dsxc = sum(dxsc), .groups = "drop")
+# 
+# write_csv(d_out_inaki,"d_out_inaki.csv")
 
-d_out_inaki <-
-  d_out |> 
-  ungroup() |> 
-  group_by(measure,sex,period,age,x,h,u) |> 
-  summarize(lsxc = sum(lxsc),
-         dsxc = sum(dxsc), .groups = "drop")
-
-write_csv(d_out_inaki,"d_out_inaki.csv")
-
-library(ggridges)
-d_out |> 
-  filter(measure == "SRH") |> 
-  group_by(h,u) |> 
-  summarize(lxsc = sum(lxsc),
-            dxsc = sum(dxsc)) |> 
-  filter(u %% 5 == 0) |> 
-  ggplot(aes(x = h, height = lxsc, y = as.factor(u))) +
-  geom_ridgeline(scale=5, alpha = .3, fill = "#1133FF",col = "#1133FF") # +
+# library(ggridges)
+# d_out_share |> 
+#   filter(measure == "GALI") |> 
+#   group_by(h,u) |> 
+#   summarize(lxsc = sum(lxsc),
+#             dxsc = sum(dxsc)) |> 
+#   filter(u %% 5 == 0) |> 
+#   ggplot(aes(x = h, height = dxsc, y = as.factor(u))) +
+#   geom_ridgeline(scale=200, alpha = .3, fill = "#1133FF",col = "#1133FF") # +
  # metR::geom_contour2(aes(label = after_stat(level)), color = "#00000050", size = 0.5) 
 
 
 
 
 
-d_out |> group_by(measure,sex) |> 
+d_out_share |> group_by(measure,sex) |> 
   summarize(check = sum(dxsc)) |> pull(check)
-d_out
+
 # variance checks
-d_out |>
-  group_by(measure, sex) |>
-  # mutate(le = sum((x + .5) * dxsc),
-  #        hle = sum((h + .5) * dxsc),
-  #        ule = sum((u + .5) * dxsc)) |>
+variance_table <-
+d_out_share |>
   summarize(
-    # le = sum((x + .5) * dxsc),
-    # hle = sum((h + .5) * dxsc),
-    # ule = sum((u + .5) * dxsc),
-             hle    = sum(lxsc[current_state == "H"])-.5,
-             ule    = sum(lxsc[current_state == "U"])-.5,
-             le     = sum(lxsc)-.5,
-            vle    = sum(((x+.5) - le) ^ 2 * dxsc),
-            vh     = sum(((h+.5) - hle) ^ 2 * dxsc),
-            vu     = sum(((u+.5) - ule) ^ 2 * dxsc),
-            cov_hu = sum(((h+.5) - hle) * ((u+.5) - ule) * dxsc)) |>
-  mutate(vle_check = vh + vu + 2 * cov_hu) |> View()
-
-
-d_out |> 
+    le = sum((x + .5) * dxsc),
+    hle = sum((h + .5) * dxsc),
+    ule = sum((u + .5) * dxsc),
+    vle    = sum(((x+.5) - le) ^ 2 * dxsc),
+    vh     = sum(((h+.5) - hle) ^ 2 * dxsc),
+    vu     = sum(((u+.5) - ule) ^ 2 * dxsc),
+    cov_hu = sum(((h+.5) - hle) * ((u+.5) - ule) * dxsc),
+    .by = c(measure, sex)) |>
+  mutate(vle_check = vh + vu + 2 * cov_hu) 
+variance_table
+library(xtable)
+variance_table |> 
+  filter(measure == "ADL") |> 
+  mutate(sdx = sqrt(vle),
+         sdh = sqrt(vh),
+         sdu = sqrt(vu)) |> 
+  unlist()
+d_out_share |> 
   filter(sex == "female", measure == "ADL") |> 
   mutate(h = h - h %% 5) |> 
   group_by(age,h) |> 
@@ -138,7 +168,7 @@ d_out |>
   theme(text = element_text(size=20))
 
 # mean distance variants 
-d_out |>
+d_out_share |>
   group_by(measure, sex) |>
   mutate(le = sum((x+.5) * dxsc),
          mh = sum((h+.5) * dxsc),
@@ -151,45 +181,45 @@ d_out |>
             cheb = sum(dxsc * cheb_dist))
 
 #
-d_out_summarized <- d_out |>
+d_out_summarized <- d_out_share |>
   group_by(measure, sex, h, u) |>
   summarize(dxsc = sum(dxsc), .groups = "drop") 
 
-dout_fine <- expand.grid(h = seq(0,60,by=.1),
-                         u = seq(0,60,by=.1)) |> 
-  filter(h+u < 60)
-d_for_mode <-
-  d_out_summarized |> 
-  filter(measure == "ADL") %>% 
-  gam(log(dxsc) ~ te(h, u, k = c(20,20)), data = .,
-      method = 'ML') |> 
-  predict(newdata=dout_fine) |> 
-  as_tibble() |> 
-  rename(dxsc=value) |> 
-  bind_cols(dout_fine)
+# dout_fine <- expand.grid(h = seq(0,60,by=.1),
+#                          u = seq(0,60,by=.1)) |> 
+#   filter(h+u < 60)
+# d_for_mode <-
+#   d_out_summarized |> 
+#   filter(measure == "ADL") %>% 
+#   gam(log(dxsc) ~ te(h, u, k = c(20,20)), data = .,
+#       method = 'ML') |> 
+#   predict(newdata=dout_fine) |> 
+#   as_tibble() |> 
+#   rename(dxsc=value) |> 
+#   bind_cols(dout_fine)
 
-d_for_mode |> 
-  ggplot(aes(x=h,y=u,fill=exp(dxsc)) )+
-  geom_tile()
+# d_for_mode |> 
+#   ggplot(aes(x=h,y=u,fill=exp(dxsc)) )+
+#   geom_tile()
 
-d_mode <- d_for_mode |>
-  filter(dxsc == max(dxsc))
-
-d_for_mode |> 
-  group_by(h) |> 
-  summarize(dxsc = sum(exp(dxsc)),.groups = "drop") |> 
-  filter(dxsc==max(dxsc))
-
-d_for_mode |> 
-  group_by(u) |> 
-  summarize(dxsc = sum(exp(dxsc)),.groups = "drop") |> 
-  filter(dxsc==max(dxsc))
-
-d_for_mode |> 
-  mutate(x=h+u) |> 
-  group_by(x) |> 
-  summarize(dxsc = sum(exp(dxsc)),.groups = "drop") |> 
-  filter(dxsc==max(dxsc))
+# d_mode <- d_for_mode |>
+#   filter(dxsc == max(dxsc))
+# 
+# d_for_mode |> 
+#   group_by(h) |> 
+#   summarize(dxsc = sum(exp(dxsc)),.groups = "drop") |> 
+#   filter(dxsc==max(dxsc))
+# 
+# d_for_mode |> 
+#   group_by(u) |> 
+#   summarize(dxsc = sum(exp(dxsc)),.groups = "drop") |> 
+#   filter(dxsc==max(dxsc))
+# 
+# d_for_mode |> 
+#   mutate(x=h+u) |> 
+#   group_by(x) |> 
+#   summarize(dxsc = sum(exp(dxsc)),.groups = "drop") |> 
+#   filter(dxsc==max(dxsc))
 
 # ------------------------------------------------------------------------------ #
 d_out_summarizedi <-
@@ -349,7 +379,7 @@ p
     mutate(x=h+u) |> 
     group_by(x) |> 
     summarize(dx = sum(dxsc))
-  
+
   p1<-
   dhi |> 
     ggplot(aes(x=h,y=dh)) +
@@ -380,7 +410,7 @@ p
     labs(title="d(x)")
   library(patchwork)
 pout <- p1 | p2 | p3
-ggsave("p3.png",pout,width=11,height=7)    
+ggsave("fig4.svg",pout,width=11,height=7)    
 
   # label the mode
   # geom_point(data  = d_modei,
@@ -403,7 +433,7 @@ ggsave("p3.png",pout,width=11,height=7)
 main_plot
 
 
-dh <- d_out |> 
+dh <- d_out_share |> 
   group_by(h) |>
   summarize(dxsc = sum(dxsc))
 
@@ -415,7 +445,7 @@ dh %>%
              color      = "red") +
   theme_minimal() 
 
-du <- d_out |>
+du <- d_out_share |>
   group_by(u) |>
   summarize(dxsc = sum(dxsc))
 
@@ -429,7 +459,7 @@ du |>
                color    = "blue") +
   theme_minimal() 
 
-d_out |>
+d_out_share |>
   mutate(ph = h / x) |>
   group_by(x, ph) |>
   summarize(dxsc    = sum(dxsc),
@@ -446,12 +476,13 @@ d_out |>
   geom_col(width = 1) +
   labs(title = "Deaths by age (-50) and fraction of life lived by state\n(experimental)")
 
-d_out |>
+bin_size <- .04
+d_out_share |>
   mutate(ph = h / x,
-         ph = ph - ph %% .03 + .01) |>
+         ph = ph - ph %% bin_size + bin_size/2) |>
   group_by(ph) |>
   summarize(dxsc    = sum(dxsc),
-            .groups = "drop") 
+            .groups = "drop") |> 
   ggplot(aes(x = ph,
              y = dxsc)) +
   geom_line() +
@@ -459,7 +490,7 @@ d_out |>
        y     = "deaths",
        title = "deaths by fraction of life lived healthy")
 
-d_out |>
+d_out_share |>
   mutate(ph = h / x) |>
   group_by(x,ph) |>
   summarize(lxsc    = sum(lxsc),
