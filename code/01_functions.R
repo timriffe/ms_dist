@@ -135,7 +135,10 @@ p_tibble2lxs <- function(p_tibble, state = "H", init = c(H = 0.8, U = 0.2)) {
 }
 
 #' @title calc_ex_simple
-#' @description perform simple lifetable
+#' @description perform direct multistate lifetable calculations using increment-decrement lifetable method. 2 transients states only, using `H` and `U` as labels.
+#' @param p_tibble a `data.frame` with columns `age`, and columns containing transitions, where column names are two concatenated letters where the first letter gives the origin state and the second letter gives the destination state. Here transitions `HH`,`UU`,`UH`,and `HU` are explicitly used, so use these names.
+#' @return a tibble with one row and three columns: `HLE`, `ULE`, `LE`
+#' 
 calc_ex_simple <- function(p_tibble){
   init <- p_tibble |> 
     filter(age == min(age)) |> 
@@ -167,7 +170,10 @@ calc_ex_simple <- function(p_tibble){
          ULE = ULE,
          LE  = HLE + ULE)
 }
-
+#' @title calc_dxh
+#' @description perform direct multistate lifetable calculations to derive deaths structured by state-at-death (`current_state`), cumulative years lived in good health (`h`), in poor health (`u`)
+#' @param p_tibble a `data.frame` with columns `age`, and columns containing transitions, where column names are two concatenated letters where the first letter gives the origin state and the second letter gives the destination state. Here transitions `HH`,`UU`,`UH`,and `HU` are explicitly used, so use these names.
+#' 
 calc_dxh <- function(p_tibble){
   ages <- p_tibble$age |> unique() |> sort()
   aa   <- c(ages,max(ages)+1)
