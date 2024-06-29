@@ -44,10 +44,8 @@ ggsave("fig2.svg", f2)
 
 # -----------------------------------------
 # Figure 3
-
-
-
-
+# lots of annotations done straight in R,
+# that's why the code is so long for this figure
 
 p <-
   d_out_summarizedi |>
@@ -176,6 +174,61 @@ p <-
            size  = 5) 
 p
 ggsave("share_adl_females.svg",p,width=7,height=7,units="in")
+
+
+
+# Figure 4
+d_out_summarizedi <- d_out_share |>
+  group_by(measure, sex, h, u) |>
+  summarize(dxsc = sum(dxsc), .groups = "drop") |> 
+  filter(measure == "ADL", sex == "female")
+
+dhi <-
+  d_out_summarizedi |> 
+  group_by(h) |> 
+  summarize(dh = sum(dxsc))
+dui <-
+  d_out_summarizedi |> 
+  group_by(u) |> 
+  summarize(du = sum(dxsc))
+dxi<-
+  d_out_summarizedi |> 
+  mutate(x=h+u) |> 
+  group_by(x) |> 
+  summarize(dx = sum(dxsc))
+
+p1<-
+  dhi |> 
+  ggplot(aes(x=h,y=dh)) +
+  geom_line() +
+  theme_minimal() +
+  theme(text = element_text(size=20))+
+  geom_area(fill = "#aaCCaa")+
+  ylim(0,.1)+
+  labs(title="d(h)")
+p2<- 
+  dui|> 
+  ggplot(aes(x=u,y=du)) +
+  geom_line()+
+  theme_minimal() +
+  theme(text = element_text(size=20)) +
+  geom_area(fill = "#CCaaaa")+
+  ylim(0,.1)+
+  labs(title="d(u)")
+
+p3<-
+  dxi|> 
+  ggplot(aes(x=x,y=dx)) +
+  geom_line()+
+  theme_minimal() +
+  theme(text = element_text(size=20)) +
+  geom_area(fill = "#aaaaCC")+
+  ylim(0,.1)+
+  labs(title="d(x)")
+library(patchwork)
+pout <- p1 | p2 | p3
+ggsave("fig4.svg",pout,width=11,height=7)    
+
 
 
 
