@@ -68,7 +68,7 @@ p <-
            label = "age at death",
            angle = -45,
            size  = 5) +
-  metR::geom_contour2(aes(label = after_stat(level)), color = "#00000050", size = 0.5) +
+  metR::geom_contour2(aes(label = after_stat(level)), color = "#00000050", linewidth = 0.5) +
   labs(x = "healthy years (h)",
        y = "unhealthy years (u)") +
   geom_point(aes(x = HLEi$HLE, 
@@ -208,6 +208,7 @@ p3<-
 
 # compose plot
 pout <- p1 | p2 | p3
+pout
 ggsave("fig4.svg",pout,width=11,height=7)    
 
 

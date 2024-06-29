@@ -61,6 +61,8 @@ p455S <-
   select(age, HHS, HUS, UUS, UHS) %>% 
   pivot_longer(-age, names_to = "from_to", values_to = "p_conditioned")%>% 
   mutate(variant = "pij455")
+
+# where did p_tibble_extrap come from?
 p_tibble_extrapS <- 
   p_tibble_extrap %>% 
   mutate(HHS = HH / (1-HD),
