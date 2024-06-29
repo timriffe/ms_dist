@@ -7,7 +7,7 @@ if (!"pacman" %in% installed.packages()[,"Package"]){
 }
 library(pacman)
 
-libraries <- c("colorspace","data.table","tidyverse","collapse","tictoc","tidyfast")
+libraries <- c("colorspace","data.table","tidyverse","collapse","tictoc","tidyfast","patchwork")
 if(sum(!p_isinstalled(libraries))>0) {
   p_install(
     package = libraries[!p_isinstalled(libraries)], 

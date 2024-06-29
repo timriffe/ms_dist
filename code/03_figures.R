@@ -1,30 +1,8 @@
 source("code/02_calculate.R")
-optional_plots <- FALSE
-# toggle this if manually executing the script, it'll generate
-# several complementary plots that didn't make it into the manuscript.
-# These may be diagnostics or unshowcased results.
 
+# Figure 1 was made using tikz inside LaTeX
 
-# ----------------------------------------------- #
-if (optional_plots){
-  # View all transitions
-  share_all |>
-    # positive col range ensures it'll work with or without sex, age, variant cols
-    pivot_longer(c(HU,HD,HH,UH,UU,UD), names_to = "from-to", values_to = "p") |>
-    ggplot(aes(x=age,y=p,color=`from-to`,linetype=sex))+
-    geom_line() +
-    facet_wrap(~measure) +
-    xlim(50,119) +
-    theme_minimal()
-  
-  # Note: TR decided not to use GALI based on this plot:
-  # mortality for people without GALI disability is higher
-  # than those with, and it makes no sense to me, but we
-  # didn't have resources to dig into it.
-  
-}
-
-# Make Figure 2: (transitions for ADL)
+# Figure 2: (transitions for ADL)
 f2 <-
   share_all |>
   filter(measure == "ADL") |> 
@@ -173,16 +151,17 @@ p <-
            label = paste0("Mean\n(", sprintf("%.2f", round(HLEi$HLE, 2)), ",", round(HLEi$ULE, 2), ")"),
            size  = 5) 
 p
-ggsave("share_adl_females.svg",p,width=7,height=7,units="in")
+ggsave("fig3.svg",p,width=7,height=7,units="in")
 
 
 
-# Figure 4
+# Figure 4: Compare marginal distributions d(h,.),d(u,.),d(x,.)
 d_out_summarizedi <- d_out_share |>
   group_by(measure, sex, h, u) |>
   summarize(dxsc = sum(dxsc), .groups = "drop") |> 
   filter(measure == "ADL", sex == "female")
 
+# Calculate margins one at a time
 dhi <-
   d_out_summarizedi |> 
   group_by(h) |> 
@@ -197,6 +176,7 @@ dxi<-
   group_by(x) |> 
   summarize(dx = sum(dxsc))
 
+# create panels one at a time
 p1<-
   dhi |> 
   ggplot(aes(x=h,y=dh)) +
@@ -225,12 +205,13 @@ p3<-
   geom_area(fill = "#aaaaCC")+
   ylim(0,.1)+
   labs(title="d(x)")
-library(patchwork)
+
+# compose plot
 pout <- p1 | p2 | p3
 ggsave("fig4.svg",pout,width=11,height=7)    
 
 
-
+# table 1
 
 variance_table <-
   d_out_share |>
@@ -255,7 +236,7 @@ variance_table |>
   unlist()
 
 
-# mean distance variants 
+# Table 2, mean distance variants 
 d_out_share |>
   group_by(measure, sex) |>
   mutate(le = sum((x+.5) * dxsc),
@@ -268,4 +249,4 @@ d_out_share |>
             euc = sum(dxsc * euc_dist),
             cheb = sum(dxsc * cheb_dist))
 
-
+# That's all, folks
