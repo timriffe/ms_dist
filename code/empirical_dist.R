@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------------------ #
 
-source("aux_functions.R")
+optional_plots <- FALSE
 
 # adl_iadl <- read_csv("hrs_adl_iadl_all.csv", show_col_types= FALSE) |>
 #   mutate(race = "all", .before=2)
@@ -10,11 +10,7 @@ source("aux_functions.R")
 
 share_all <- 
   read_csv("share_all.csv",show_col_types = FALSE) |> 
-  select(-version) 
-  
-
-share_all <-
-  share_all |>
+  select(-version) |>
   # positive col range ensures it'll work with or without sex, age, variant cols
   pivot_longer(-c(country, sex, measure,age), names_to = "from_to", values_to = "p") |>
   mutate(from = substr(from_to,1,1),
@@ -29,33 +25,13 @@ share_all <-
   select(-from, -to) |>
   pivot_wider(names_from = from_to, values_from = p)
 
-# View all transitions
-share_all |>
-  # positive col range ensures it'll work with or without sex, age, variant cols
-  pivot_longer(c(HU,HD,HH,UH,UU,UD), names_to = "from-to", values_to = "p") |>
-  ggplot(aes(x=age,y=p,color=`from-to`,linetype=sex))+
-  geom_line() +
-  facet_wrap(~measure) +
-  xlim(50,119) +
-  theme_minimal()
 
-# Make transitions figure for ADL:
-f2 <-
-share_all |>
-  filter(measure == "ADL") |> 
-  # positive col range ensures it'll work with or without sex, age, variant cols
-  pivot_longer(c(HU,HD,HH,UH,UU,UD), names_to = "from-to", values_to = "p") |>
-  mutate(from = substr(`from-to`,1,1),
-         to = substr(`from-to`,2,2)) |> 
-  ggplot(aes(x=age,y=p,color=`from-to`,linetype=sex))+
-  geom_line() +
-  theme_minimal() +
-  xlim(50,110) +
-  theme(text = element_text(size=20)) +
-  guides(linetype = "none") +
-  facet_wrap(~from)
+# ----------------------------------------------- #
 
-ggsave("fig2.svg", f2)
+
+
+
+
 # mortality ratio looks plausible
 share_all |>
   filter(measure == "ADL") |> 
