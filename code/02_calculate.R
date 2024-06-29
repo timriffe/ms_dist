@@ -3,7 +3,7 @@ source("code/01_functions.R")
 
 
 share_all <- 
-  read_csv("share_all.csv",show_col_types = FALSE) |> 
+  read_csv("data/share_all.csv",show_col_types = FALSE) |> 
   select(-version) |>
   # positive col range ensures it'll work with or without sex, age, variant cols
   pivot_longer(-c(country, sex, measure,age), names_to = "from_to", values_to = "p") |>

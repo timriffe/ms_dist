@@ -18,7 +18,7 @@ f2 <-
   guides(linetype = "none") +
   facet_wrap(~from)
 f2
-ggsave("fig2.svg", f2)
+ggsave("figs/fig2.svg", f2)
 
 # -----------------------------------------
 # Figure 3
@@ -151,7 +151,7 @@ p <-
            label = paste0("Mean\n(", sprintf("%.2f", round(HLEi$HLE, 2)), ",", round(HLEi$ULE, 2), ")"),
            size  = 5) 
 p
-ggsave("fig3.svg",p,width=7,height=7,units="in")
+ggsave("figs/fig3.svg",p,width=7,height=7,units="in")
 
 
 
@@ -209,7 +209,7 @@ p3<-
 # compose plot
 pout <- p1 | p2 | p3
 pout
-ggsave("fig4.svg",pout,width=11,height=7)    
+ggsave("figs/fig4.svg",pout,width=11,height=7)    
 
 
 # table 1
