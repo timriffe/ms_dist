@@ -1,0 +1,1 @@
+Reproducibility pack for manuscript T. Riffe, I. Permanyer, R. Tursun-zade, and M. Muszynska-Spielauer (2024) "The joint distribution of years lived in good and poor health". Soon to be available as an MPIDR Working Paper, and submitted to a journal
