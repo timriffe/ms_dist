@@ -1,1 +1,1 @@
-Reproducibility pack for manuscript T. Riffe, I. Permanyer, R. Tursun-zade, and M. Muszynska-Spielauer (2024) "The joint distribution of years lived in good and poor health". Soon to be available as an MPIDR Working Paper, and submitted to a journal
+Reproducibility pack for manuscript T. Riffe, I. Permanyer, R. Tursun-zade, and M. Muszynska-Spielauer (2024) "The joint distribution of years lived in good and poor health". MPIDR Working Paper WP-2024-013. DOI:10.4054/MPIDR-WP-2024-013
